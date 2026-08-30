@@ -1,0 +1,5 @@
+firstname,lastname,age,hair,eyes
+rose,jetson,10,brown,brown
+rob,thomson,9,ginger,brown
+peter,smith,10,brown,blue
+mr,walker,50,none,brown
