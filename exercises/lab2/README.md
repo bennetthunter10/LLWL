@@ -146,11 +146,31 @@ The other two exist and are wrong:
    ```
 
    On **one** of these two accounts that command exits `0` — it says yes — and the account still
-   cannot log in. `sudo` cannot exec a `nologin` shell, so it catches the first problem, but it
-   does not enforce the target account's expiry date the way a real console or SSH login does.
-   (It may print some complaints about the home directory on the way. Those are the *other*
-   problem, below, and they do not change the exit status.) So: when the probe and the aging
-   fields disagree, the aging fields are right.
+   cannot log in.
+
+   The reason is worth getting exactly right, because the near-miss version of it gets repeated
+   a lot. `sudo` does not look at the account's shell and form an opinion. It *runs* it, and
+   `/usr/sbin/nologin` is a real program whose whole job is to print `This account is currently
+   not available.` and exit non-zero (`man 8 nologin` — "politely refuse a login"). So the probe
+   catches that account by walking straight into the refusal, not by checking anything. Nothing
+   on that path consults an expiry date, and the other account has a perfectly ordinary
+   `/bin/bash` that runs `true` and exits `0`.
+
+   Put two tools side by side on an expired account and the difference is stark. (`su` is
+   wrapped in `sudo` only so it does not stop to ask for a password nobody has; `-c true` keeps
+   it from opening an interactive shell.)
+
+   ```
+   $ sudo -u <expired-user> -i true; echo $?
+   0
+   $ sudo su - <expired-user> -c true
+   Your account has expired; please contact your system administrator.
+   su: Authentication failure
+   ```
+
+   (`sudo -u ... -i` may also print some complaints about the home directory. Those are the
+   *other* problem, below, and they do not change the exit status.) So: when the probe and the
+   aging fields disagree, the aging fields are right.
 
 2. **One of the two home directories has an owner that is not a person.** Run `ls -l /home` and
    look hard at the owner column: where every other row has a name, one row has a bare number.
@@ -213,6 +233,12 @@ Two things stated plainly rather than left as puzzles:
   of these directories was planted with a seed file in it. That file predates whatever you do to
   the directory and still carries the old group. `ls -l` in each directory when you think you are
   finished.
+
+  Nothing in `check.sh` looks at those two files. You can leave them wrong and still go green.
+  I am telling you that rather than adding a check for it, because the more useful lesson is the
+  one underneath: **a green checker means the things somebody thought to check are right, not
+  that the system is.** Every monitoring dashboard you will ever be handed has this property. The
+  thing that bites you in a year is the file nobody wrote a check for.
 - **The parent, `/srv/llwl-projects/` itself, has to stay traversable** or nothing underneath it is
   reachable by anyone. Leaving it `0755` is a perfectly defensible choice: it means any user on the
   machine can list it and see that `alpha` and `beta` exist. That is a real disclosure and you
@@ -220,9 +246,18 @@ Two things stated plainly rather than left as puzzles:
   what decide who gets *inside* them.
 
 And a design question, which is the actual work of this tier: how many groups is this? One per
-project? One for "everybody on a project"? Something cleverer? Whatever you choose, `getent group`
-should be able to answer "who is on alpha" afterwards, and you should be able to say in your notes
-what you rejected and why.
+project? One for "everybody on a project"? Something cleverer? Whatever you choose, be able to
+say in your notes what you rejected and why.
+
+One preference of mine, offered as a preference and not as a rule: I like the design where
+`getent group <name>` can answer "who is on alpha". That quietly rules something out. A group
+that is somebody's **primary** group does not list them in the member field of `/etc/group` —
+make `llwlalpha` Mira's primary group and `getent group llwlalpha` comes back with an empty
+member list, while `id llwlmira` shows the membership plainly. The checker does not mind either
+way: a primary-group design passes tier 2 exactly as a supplementary-group one does, because
+every check asks what the accounts can *do*. Which is the whole point of the tier.
+But "who is on this project" is a question somebody will ask you at 4pm on a Friday, and a design
+where the answer is one command is worth something.
 
 **Worth reading:** `man chmod` — the section headed **SETUID AND SETGID BITS**, and what the `2`
 in `2770` is doing that the `0` in `0770` is not. `man gpasswd` (`-a/--add`, `-d/--delete`) for
@@ -345,11 +380,12 @@ looser" is not a reason to write something looser.
 
 **Worth reading:** `man 5 sudoers`, and specifically two things. First, `Cmnd_Alias`: you do not
 strictly need one for a single command, but it gives the grant a name, and a named rule is one a
-human can review in a year. Second, and this is the whole of beat 3, find the sentence in the
-**Command** description that reads *"If no command line arguments are specified, the user may run
-the command with any arguments they choose."* Read it twice and then look at the planted rule
-again. `man visudo` for `-c/--check` and `-f/--file`. `man sudo` for `-l/--list` and
-`-U/--other-user`.
+human can review in a year. Second, and this is the whole of beat 3, one sentence: go to
+**SUDOERS FILE FORMAT** → **Aliases**, find the paragraph that begins "A `Cmnd_List` is a list of
+one or more commands, directories, or aliases", and read it to the end. It contains this: *"If no
+command line arguments are specified, the user may run the command with any arguments they
+choose."* Read that twice and then look at the planted rule again. `man visudo` for `-c/--check`
+and `-f/--file`. `man sudo` for `-l/--list` and `-U/--other-user`.
 
 **Verify:** `./check.sh 3`, and then `./check.sh` for tiers 1 to 3 together.
 

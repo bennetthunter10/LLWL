@@ -205,10 +205,16 @@ account_expired() {
 #
 # The account_expired guard is NOT redundant -- do not delete it. Verified on
 # Ubuntu 24.04 (Sep 2026), as both root and an ordinary user:
-# `sudo -u <expired-user> -i true` SUCCEEDS. Sudo fails on a nologin shell (it
-# cannot exec it) but does not enforce the target account's expiry date. A real
-# ssh or console login would refuse that account, so without the guard this
-# probe would say "can log in" for someone who cannot.
+# `sudo -u <expired-user> -i true` SUCCEEDS.
+#
+# What sudo does catch is the OTHER planted defect, and not by inspecting the
+# shell -- it execs it, and /usr/sbin/nologin is a program that prints "This
+# account is currently not available." and exits non-zero (nologin(8)). Nothing
+# on that path consults the target's expiry date. `su - <expired-user>` does,
+# and refuses with "Your account has expired; please contact your system
+# administrator." / "su: Authentication failure", as would a console or ssh
+# login. So without the guard this probe would say "can log in" for someone who
+# cannot. Do not replace the guard with a claim about what sudo "cannot" do.
 #
 # Side effect: `sudo -i` opens a real login session, so systemd starts a
 # per-user manager for the target, and it outlives this call by a moment.
