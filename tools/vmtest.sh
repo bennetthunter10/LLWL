@@ -80,20 +80,38 @@ LAB_DIR=/tmp/llwl/exercises/$LAB
 #
 # The set operations use grep, not comm: comm needs both inputs sorted in the
 # same locale, and the VM's sort and the host's disagree about names like _ssh,
-# which made an ordinary system group look like a leak.
+# which made an ordinary system group look like a leak. Do not "simplify" this
+# back to comm.
 db_names() { VM bash -c "getent $1 | cut --delimiter=: --fields=1"; }
 only_in_second() { grep --invert-match --line-regexp --fixed-strings --file=<(printf '%s\n' "$1") <<<"$2" || true; }
 in_both() { grep --line-regexp --fixed-strings --file=<(printf '%s\n' "$1") <<<"$2" || true; }
 
 # A "nothing leaked" verdict is only worth something if the machine started with
-# nothing to leak. Anything llwl* that is already here (a group a previous run
-# left, or a real leak from a teardown regression) would sit in the "before"
+# nothing to leak: anything llwl* that is already here would sit in the "before"
 # snapshot, be classified as nobody's, and vanish from every assertion below.
-stale=$(VM bash -c "{ getent passwd; getent group; } | cut --delimiter=: --fields=1 | grep '^llwl' || true")
-if [[ -n $stale ]]; then
-	printf '%s\n' "$stale"
-	fatal "the machine is not clean: the llwl* names above already exist. Remove them (tear down the lab, then groupdel any group teardown leaves) and re-run"
+# So establish that baseline rather than hope for it. This is start-of-run setup,
+# and it hides nothing: a run that leaks still fails at the end of THAT run.
+# (Cleaning after teardown would be different -- it would suppress the assertion.)
+#
+# Lab 2 leaves the learner's own groups behind by design, so a second run always
+# starts with some. Every removal is printed. Everything here goes through
+# orb -m "$MACHINE" (VM_ROOT), so it can only ever touch the disposable machine.
+step "0. clear llwl* leftovers from earlier runs"
+removed=$(VM_ROOT bash -c '
+	for u in $(getent passwd | cut --delimiter=: --fields=1 | grep "^llwl" || true); do
+		loginctl terminate-user "$u" 2>/dev/null || true
+		if userdel --force --remove "$u" >/dev/null 2>&1; then echo "removed user $u"; else echo "COULD NOT REMOVE user $u"; fi
+	done
+	for g in $(getent group | cut --delimiter=: --fields=1 | grep "^llwl" || true); do
+		if groupdel "$g" >/dev/null 2>&1; then echo "removed group $g"; else echo "COULD NOT REMOVE group $g"; fi
+	done
+')
+if [[ -n $removed ]]; then
+	printf '%s\n' "$removed" | sed 's/^/  /'
+else
+	echo "  nothing to remove"
 fi
+! grep --quiet 'COULD NOT' <<<"$removed" || fatal "could not clear the machine; fix it by hand and re-run"
 
 groups_pre=$(db_names group)
 users_pre=$(db_names passwd)
