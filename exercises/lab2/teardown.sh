@@ -173,8 +173,11 @@ for h in "${homes[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# 4. Groups. Strip secondary members before deleting a group, or groupdel
-#    refuses. Only the lab's own group, however the manifest is worded.
+# 4. Groups. Only the lab's own group, however the manifest is worded. Secondary
+#    members need no stripping first: groupdel (tested) removes the group and
+#    their membership with it, and refuses only when the group is some
+#    account's PRIMARY group. Members are never touched on the path that keeps
+#    the group, so a learner's membership survives for the lab that needs it.
 # ---------------------------------------------------------------------------
 
 for g in "${groups[@]}"; do
@@ -195,19 +198,9 @@ for g in "${groups[@]}"; do
 		warn "group $g left in place -- $claimed_by also claims it, so another lab still needs it"
 		continue
 	fi
-	members=$(getent group "$g" | cut -d: -f4)
-	if [[ -n $members ]]; then
-		IFS=',' read -r -a member_list <<<"$members"
-		for m in "${member_list[@]}"; do
-			[[ -n $m ]] || continue
-			info "removing $m from $g"
-			gpasswd --delete "$m" "$g" >/dev/null ||
-				warn "could not remove $m from $g -- check with: getent group $g"
-		done
-	fi
 	info "deleting group $g"
 	groupdel "$g" ||
-		warn "could not delete group $g (is it someone's primary group, or does it still have members?) -- left in place; review with: getent group $g"
+		warn "could not delete group $g (is it some account's primary group?) -- left in place; review with: getent group $g"
 done
 
 # ---------------------------------------------------------------------------
