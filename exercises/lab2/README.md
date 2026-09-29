@@ -21,7 +21,7 @@ into. And the two of them together should be able to hand the tree to a new coll
 months without it having rotted in the meantime.
 
 Nadia needs exactly one privileged power: **restart `llwl-report.service`**, with no password, at
-3am, without waking anybody. That is the whole grant. In particular:
+3am, without waking anybody (tier 3 says exactly how the command has to be spelled). That is the whole grant. In particular:
 
 > **Being on call is not the same thing as being trusted with the credentials.** Nadia must not be
 > able to read `/etc/llwl-report/secrets.env`, and she must not be able to touch any other service
@@ -231,9 +231,10 @@ Two things stated plainly rather than left as puzzles:
 
 - **Changing a directory's group does not change the group of the files already inside it.** Each
   of these directories was planted with a seed file in it. That file predates whatever you do to
-  the directory and still carries the old group. Run `sudo ls -l` in each directory when you think
-  you are finished. It needs `sudo` because, once tier 2 is right, you are on neither team and
-  plain `ls` will refuse you.
+  the directory and still carries the old group. When you think you are finished, run
+  `sudo ls -l /srv/llwl-projects/alpha` and `sudo ls -l /srv/llwl-projects/beta`. It needs `sudo`,
+  and it needs the full path rather than a `cd` first, because once tier 2 is right you are on
+  neither team: you cannot enter those directories, so neither `cd` nor a plain `ls` will work.
 
   Nothing in `check.sh` looks at those two files. You can leave them wrong and still go green.
   I am telling you that rather than adding a check for it, because the more useful lesson is the
@@ -300,7 +301,7 @@ Four beats, in order:
    and Nadia should be able to restart `llwl-report` with no password.
 
    One fact about sudoers you need before you write any rule of your own: **it matches the command
-   and its arguments as literal text.** `systemctl restart llwl-report` and `systemctl restart
+   and its arguments as literal text, unless you use wildcards.** `systemctl restart llwl-report` and `systemctl restart
    llwl-report.service` are the same thing to systemd and two different commands to the policy. A
    rule that permits one does not permit the other. `check.sh` restarts the service as Nadia with
    the **short name**, `sudo -n systemctl restart llwl-report`, which is also what a person
