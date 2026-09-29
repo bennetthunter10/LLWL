@@ -100,6 +100,9 @@ gpasswd --add llwlnadia llwloncall >/dev/null
 systemctl_path=$(command -v systemctl)
 
 dropin_tmp=$(mktemp)
+# A failure of cat or install below would otherwise leave the scratch copy of a
+# sudoers rule lying around.
+trap 'rm -f "$dropin_tmp"' EXIT
 cat >"$dropin_tmp" <<DROPIN
 # /etc/sudoers.d/llwl-oncall
 #
@@ -121,7 +124,15 @@ rm -f "$dropin_tmp"
 
 # And the whole configuration, with the new file in it. If this fails, the
 # root shell you kept open is how you get back in.
-visudo --check --quiet || die "sudo configuration broke; fix it from the root shell you kept open"
+#
+# Validating the file alone does not prove it composes: an alias name that
+# collides with one in /etc/sudoers or another drop-in only fails here. So on
+# failure take the file straight back out. No drop-in is better than a broken
+# one, and there is nothing to restore -- this replaced the planted rule.
+if ! visudo --check --quiet; then
+	rm -f /etc/sudoers.d/llwl-oncall
+	die "installing my rule broke sudo's configuration; removed it again. Run 'sudo visudo -c' to see what else is wrong"
+fi
 
 # ... tiers appended by later tasks ...
 

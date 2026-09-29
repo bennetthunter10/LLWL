@@ -36,6 +36,9 @@ SHARED=$PROJ_DIR/shared
 SUDOERS_DROPIN=/etc/sudoers.d/llwl-oncall
 
 need_linux
+# Tier 3 builds a command line from `command -v systemctl`. Without the tool
+# that expands to nothing and the over-reach checks would pass by accident.
+need_cmd systemctl
 refuse_root
 
 TIER=${1:-main}
@@ -193,8 +196,15 @@ if want_tier 3; then
 		# the service as her, with no password, and confirm it really restarted.
 		before=$(sudo -n systemctl show --property=ExecMainStartTimestampMonotonic --value "$REPORT_SVC" 2>/dev/null || echo 0)
 		if as_user "$NADIA" sudo -n systemctl restart "$REPORT_SVC" >/dev/null 2>&1; then
-			sleep 1
-			after=$(sudo -n systemctl show --property=ExecMainStartTimestampMonotonic --value "$REPORT_SVC" 2>/dev/null || echo 0)
+			# The restart returns before the new process has stamped its start
+			# time, so poll for a few seconds instead of guessing how long a
+			# loaded machine needs. Normally the first look is enough.
+			after=$before
+			for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+				after=$(sudo -n systemctl show --property=ExecMainStartTimestampMonotonic --value "$REPORT_SVC" 2>/dev/null || echo 0)
+				[[ $after -gt $before ]] && break
+				sleep 0.25
+			done
 			if [[ $after -gt $before ]]; then
 				pass "$NADIA can restart $REPORT_SVC without a password, and it really restarted"
 			else

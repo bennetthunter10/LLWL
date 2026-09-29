@@ -64,6 +64,11 @@ need_cmd visudo
 #    file.)
 # ---------------------------------------------------------------------------
 
+if [[ -d $SUDOERS_DROPIN ]]; then
+	# install would copy the rule INTO a directory and report success, planting
+	# nothing, and the whole-config check would pass for want of a rule to break.
+	die "$SUDOERS_DROPIN is a directory. Move it aside (sudo mv $SUDOERS_DROPIN $SUDOERS_DROPIN.orig) and run setup.sh again."
+fi
 if [[ -e $SUDOERS_DROPIN || -L $SUDOERS_DROPIN ]]; then
 	if ! { [[ -f $MANIFEST ]] && grep --quiet --line-regexp --fixed-strings "path $SUDOERS_DROPIN" "$MANIFEST"; }; then
 		die "$SUDOERS_DROPIN already exists and this lab did not create it. It will not overwrite a sudoers file it does not own. Move it aside (sudo mv $SUDOERS_DROPIN $SUDOERS_DROPIN.orig) and run setup.sh again."
@@ -351,6 +356,7 @@ write_manifest
 # learner may have made. Like his project groups, it is his.
 # ---------------------------------------------------------------------------
 
+# Note: the manifest above already claims this path; if a die below leaves it absent, teardown copes.
 SYSTEMCTL=$(command -v systemctl)
 
 dropin_tmp=$(mktemp)
