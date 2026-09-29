@@ -15,27 +15,9 @@ source "$HERE/../exercises/lib/common.sh"
 U=llwltmpa
 V=llwltmpb
 D=/tmp/llwl-probe-dir
-
-# can_user_login runs `sudo -i`, which opens a real login session, and that makes
-# systemd start a per-user manager that outlives the command by a moment. userdel
-# refuses ("currently used by process") until it has gone, so end the session
-# and wait for the account to actually disappear. userdel can also exit non-zero
-# after succeeding (no mail spool), so ask getent rather than trusting its status.
-remove_user() {
-	local u=$1 i
-	user_exists "$u" || return 0
-	loginctl terminate-user "$u" 2>/dev/null || true
-	for i in {1..20}; do
-		userdel --remove "$u" 2>/dev/null || true
-		user_exists "$u" || return 0
-		sleep 0.5
-	done
-	warn "could not remove test account $u"
-}
-
 cleanup() {
-	remove_user "$U"
-	remove_user "$V"
+	delete_user "$U" || true
+	delete_user "$V" || true
 	groupdel llwltmpg 2>/dev/null || true
 	rm -rf "$D"
 }
@@ -95,6 +77,17 @@ no can_user_login "$V"          # nologin shell
 usermod --expiredate 2020-01-01 "$U"
 ok account_expired "$U"
 no can_user_login "$U"
+
+# The expiry date is the first day the account is disabled, so today counts as
+# expired and tomorrow does not. Pins the boundary (checked against `su`).
+today=$(($(date +%s) / 86400))
+usermod --expiredate "$today" "$U"
+ok account_expired "$U"
+no can_user_login "$U"
+usermod --expiredate $((today + 1)) "$U"
+no account_expired "$U"
+ok can_user_login "$U"
+
 usermod --expiredate '' "$U"
 no account_expired "$U"
 

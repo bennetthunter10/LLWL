@@ -185,13 +185,18 @@ login_shell_of() { getent passwd "$1" | cut -d: -f7; }
 # Field 8 of /etc/shadow is the expiry date in days since 1970-01-01. Empty
 # means "never". This is the only place an expired account is visible, which is
 # exactly why an expired account is such a confusing thing to be handed.
+#
+# The date is the first day the account is DISABLED, not the last day it works.
+# Observed on Ubuntu 24.04 (Sep 2026): with the expiry set to today's day number,
+# `su` refuses with "Your account has expired"; set to tomorrow, it is allowed.
+# So "expired" means exp <= today. (shadow counts UTC days, so use `date +%s`.)
 account_expired() {
 	local exp today
 	user_exists "$1" || return 1
 	exp=$(sudo -n getent shadow "$1" 2>/dev/null | cut -d: -f8)
 	[[ -n $exp ]] || return 1
 	today=$(($(date +%s) / 86400))
-	((exp < today))
+	((exp <= today))
 }
 
 # Behavioural: actually try to start a login shell as them.
@@ -202,11 +207,36 @@ account_expired() {
 # cannot exec it) but does not enforce the target account's expiry date. A real
 # ssh or console login would refuse that account, so without the guard this
 # probe would say "can log in" for someone who cannot.
+#
+# Side effect: `sudo -i` opens a real login session, so systemd starts a
+# per-user manager for the target, and it outlives this call by a moment.
+# `userdel` refuses to delete an account while that is running ("userdel: user
+# X is currently used by process N"). Anything that may have called this probe
+# on an account and later deletes it must use delete_user, below, not bare userdel.
 can_user_login() {
 	local u=$1
 	user_exists "$u" || return 1
 	! account_expired "$u" || return 1
 	sudo -n -u "$u" -i true >/dev/null 2>&1
+}
+
+# Delete an account, first ending any login session (see can_user_login), and
+# retry for up to ten seconds while systemd tears the user manager down. Needs
+# root. Succeeds if the account is gone at the end -- userdel's own exit status
+# is not trusted, because it can report failure (no mail spool) after having
+# done the job. Warns, rather than looping forever or staying silent, if the
+# account will not go.
+delete_user() {
+	local u=$1 i
+	user_exists "$u" || return 0
+	loginctl terminate-user "$u" 2>/dev/null || true
+	for i in {1..20}; do
+		userdel --remove "$u" 2>/dev/null || true
+		user_exists "$u" || return 0
+		sleep 0.5
+	done
+	warn "could not delete account $u"
+	return 1
 }
 
 uid_of() { id -u "$1" 2>/dev/null; }
