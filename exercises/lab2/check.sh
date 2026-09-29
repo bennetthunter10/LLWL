@@ -102,17 +102,19 @@ if want_tier 1; then
 	done
 
 	# Being on call is not the same thing as being trusted with the credentials.
+	# Ask what they can read, not which group they are in: there is more than one
+	# way to give somebody a group, and every one of them is a right answer.
 	for u in "$MIRA" "$TOBY"; do
-		if user_in_group "$u" "$OPS_GROUP"; then
-			pass "$u is an operator ($OPS_GROUP)"
+		if can_user_read "$u" "$SECRETS"; then
+			pass "$u can read the service credentials"
 		else
-			fail "$u is not in $OPS_GROUP, so cannot read the service credentials they are expected to operate with"
+			fail "$u cannot read $SECRETS, so cannot operate the service they are expected to operate"
 		fi
 	done
-	if user_in_group "$NADIA" "$OPS_GROUP"; then
-		fail "$NADIA is in $OPS_GROUP; she is on call for the service, which is not the same as being trusted with its credentials"
+	if can_user_read "$NADIA" "$SECRETS"; then
+		fail "$NADIA can read $SECRETS; she is on call for the service, which is not the same as being trusted with its credentials"
 	else
-		pass "$NADIA is not in $OPS_GROUP"
+		pass "$NADIA cannot read the service credentials"
 	fi
 fi
 

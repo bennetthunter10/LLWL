@@ -190,11 +190,19 @@ ORPHAN_UID=$(pick_unused_uid 61000 61999)
 
 # Remove a user from every group but their own. Both accounts start out in
 # nothing else, and a solved lab has put them in llwlops (and perhaps more).
+#
+# Two ways a re-plant could otherwise die here, both from a learner who solved
+# the lab their own way. `id --groups` lists the PRIMARY group too, and gpasswd
+# refuses to remove somebody from a group they are only in as a primary ("is
+# not a member"); so the primary group is put back to the user's own first,
+# which is what it was when planted. And a failing gpasswd is a warning, never
+# the end of the reset.
 strip_supplementary_groups() {
 	local u=$1 g
+	[[ $(id --name --group "$u") == "$u" ]] || usermod --gid "$u" "$u"
 	for g in $(id --name --groups "$u"); do
 		if [[ $g != "$u" ]]; then
-			gpasswd --delete "$u" "$g" >/dev/null
+			gpasswd --delete "$u" "$g" >/dev/null || warn "could not remove $u from $g; check with: id $u"
 		fi
 	done
 }
@@ -218,6 +226,9 @@ getent passwd llwltoby >/dev/null || useradd \
 [[ $(login_shell_of llwltoby) == /bin/bash ]] || usermod --shell /bin/bash llwltoby
 chage --expiredate 2020-01-01 llwltoby
 strip_supplementary_groups llwltoby
+# The learner may have deleted the home outright (the checker has a message for
+# that), and useradd only makes one for an account it creates.
+[[ -d /home/llwltoby ]] || mkdir --mode 0750 /home/llwltoby
 chown -R "$ORPHAN_UID:$ORPHAN_UID" /home/llwltoby
 
 # Nadia does not exist. Creating her is the learner's job. If a previous run
