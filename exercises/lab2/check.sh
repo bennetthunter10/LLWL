@@ -179,13 +179,22 @@ if want_tier 3; then
 		fail "sudo's configuration does not parse; run 'sudo visudo -c' and fix it before anything else in this tier"
 	fi
 
+	# 0440 root:root is asserted because it is the mode the tooling enforces,
+	# not because anything looser always breaks. Measured on Ubuntu 24.04
+	# (sudo 1.9.15p5), because the folklore here is wrong in both directions:
+	# sudo at RUNTIME still obeys a 0644 or 0664 drop-in, and it skips only the
+	# ones it actively distrusts -- world-writable, or not owned by root -- and
+	# it warns when it does ("is world writable", "is owned by uid N, should be
+	# 0"). `visudo -c` is the strict one: it wants exactly 0440 root:root and
+	# says "bad permissions, should be mode 0440" about anything else. So the
+	# message below states both, and claims no mechanism neither of them has.
 	if [[ -f $SUDOERS_DROPIN ]]; then
 		m=$(mode_of "$SUDOERS_DROPIN")
 		o=$(owner_of "$SUDOERS_DROPIN")
 		if [[ $m == 440 && $o == root:root ]]; then
 			pass "$SUDOERS_DROPIN is $o mode $m"
 		else
-			fail "$SUDOERS_DROPIN is $o mode $m; sudo refuses to read a drop-in that anyone but root can write, and it will not tell you it is ignoring your rule"
+			fail "$SUDOERS_DROPIN is $o mode $m; it has to be root:root mode 440. 'visudo -c' rejects any other mode, and sudo itself ignores a drop-in that is world-writable or not owned by root -- warning as it goes, in the noise above the prompt where nobody reads it"
 		fi
 	else
 		fail "$SUDOERS_DROPIN is gone; the on-call rule has to live in that file so teardown knows it owns it"
