@@ -165,7 +165,69 @@ systemctl enable --now "$REPORT_SVC" >/dev/null
 systemctl enable --now "$AUDIT_SVC" >/dev/null
 
 # ---------------------------------------------------------------------------
-# 4. Manifest. Everything this lab OWNS, whether setup.sh created it or the
+# 4. The two accounts the previous admin made. Both are wrong, in ways that are
+#    invisible from `ls` and almost invisible from `getent passwd`.
+#
+#    Every line here also RESETS state, because this script must put a fully
+#    solved lab back to broken: creating an account only if it is missing would
+#    leave a solved one solved.
+# ---------------------------------------------------------------------------
+
+# An unused uid, so that Toby's home directory ends up belonging to a number
+# with no name behind it -- what you get when somebody restores a backup from a
+# machine whose users were numbered differently.
+pick_unused_uid() {
+	local lo=$1 hi=$2 candidate
+	for ((candidate = lo; candidate <= hi; candidate++)); do
+		getent passwd "$candidate" >/dev/null && continue
+		getent group "$candidate" >/dev/null && continue
+		printf '%s\n' "$candidate"
+		return 0
+	done
+	die "no unused uid available in the range $lo-$hi"
+}
+ORPHAN_UID=$(pick_unused_uid 61000 61999)
+
+# Remove a user from every group but their own. Both accounts start out in
+# nothing else, and a solved lab has put them in llwlops (and perhaps more).
+strip_supplementary_groups() {
+	local u=$1 g
+	for g in $(id --name --groups "$u"); do
+		if [[ $g != "$u" ]]; then
+			gpasswd --delete "$u" "$g" >/dev/null
+		fi
+	done
+}
+
+# Created as if she were a service account: a shell that refuses logins, and no
+# groups beyond her own.
+getent passwd llwlmira >/dev/null || useradd \
+	--create-home \
+	--shell /usr/sbin/nologin \
+	--comment "Mira -- operator, project alpha" \
+	llwlmira
+[[ $(login_shell_of llwlmira) == /usr/sbin/nologin ]] || usermod --shell /usr/sbin/nologin llwlmira
+strip_supplementary_groups llwlmira
+
+# Created correctly, then expired -- and his home directory came off a backup.
+getent passwd llwltoby >/dev/null || useradd \
+	--create-home \
+	--shell /bin/bash \
+	--comment "Toby -- operator, project beta" \
+	llwltoby
+[[ $(login_shell_of llwltoby) == /bin/bash ]] || usermod --shell /bin/bash llwltoby
+chage --expiredate 2020-01-01 llwltoby
+strip_supplementary_groups llwltoby
+chown -R "$ORPHAN_UID:$ORPHAN_UID" /home/llwltoby
+
+# Nadia does not exist. Creating her is the learner's job. If a previous run
+# of the checker (or a solution) made her, she has to go, and delete_user is
+# what copes with the login session the checker's probe left behind. Do not
+# swallow a failure: a Nadia who survives makes tier 1 pass for the wrong reason.
+delete_user llwlnadia || die "could not remove llwlnadia; log out of any session as her and re-run"
+
+# ---------------------------------------------------------------------------
+# 5. Manifest. Everything this lab OWNS, whether setup.sh created it or the
 #    learner is expected to. teardown.sh checks each entry for existence, so
 #    listing llwlnadia here is how she gets cleaned up even though she is the
 #    learner's to create.
@@ -194,6 +256,7 @@ user llwltoby
 user llwlnadia
 user $REPORT_USER
 $group_line
+note orphanuid $ORPHAN_UID
 MANIFESTEOF
 	chmod 0644 "$MANIFEST"
 }

@@ -158,6 +158,13 @@ for u in "${users[@]}"; do
 	if home_is_safe_to_delete "$u" "$h"; then
 		info "deleting user $u and its home $h"
 		delete_user "$u" || warn "$u is still there; remove it by hand once its processes are gone"
+		# userdel --remove refuses a home directory whose owner is not the
+		# account (Toby's, straight after setup: it belongs to an orphaned uid),
+		# and leaves it behind. The gate above already vouched for this exact
+		# path, so finishing the job here is no wider than what was approved.
+		if ! getent passwd "$u" >/dev/null && [[ -d $h && ! -L $h ]]; then
+			rm --recursive --force -- "$h"
+		fi
 	else
 		info "deleting user $u (keeping its home directory)"
 		delete_user_keep_home "$u" || warn "$u is still there; remove it by hand once its processes are gone"
