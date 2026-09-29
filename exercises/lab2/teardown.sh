@@ -100,13 +100,14 @@ else
 	units=("${ALLOWED_UNITS[@]}")
 	paths=("${ALLOWED[@]}")
 	users=("${ALLOWED_USERS[@]}")
-	# Without a manifest there is no record of who created llwlops. If another
-	# lab is planted it may be that lab's group, so leave it and say so.
-	if compgen -G "$LAB_STATE/lab[0-9]*.manifest" >/dev/null; then
-		warn "another lab is planted, so group ${ALLOWED_GROUPS[*]} is left in place"
-	else
-		groups=("${ALLOWED_GROUPS[@]}")
-	fi
+	# Groups are never deleted without a manifest. It is the only record of who
+	# created llwlops, and deleting as root on a guess is the habit this repo
+	# teaches you out of. A kept empty group is litter; a wrongly deleted one
+	# silently breaks another lab or something of yours.
+	for g in "${ALLOWED_GROUPS[@]}"; do
+		getent group "$g" >/dev/null &&
+			warn "NOTE: group $g left in place. It may belong to another lab or to you, and with no manifest there is no record of who created it. Review it with: getent group $g"
+	done
 	homes=(/home/llwlmira /home/llwltoby /home/llwlnadia)
 fi
 
