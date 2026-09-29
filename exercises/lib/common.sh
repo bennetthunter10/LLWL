@@ -226,12 +226,22 @@ can_user_login() {
 # is not trusted, because it can report failure (no mail spool) after having
 # done the job. Warns, rather than looping forever or staying silent, if the
 # account will not go.
-delete_user() {
+delete_user() { _delete_user_retrying "$1" --remove; }
+
+# The same, but leaves the home directory alone. For an account whose home is
+# not one the caller is willing to delete (or does not exist): it still needs
+# the session teardown and the retry, or it survives because a user manager
+# was still running.
+delete_user_keep_home() { _delete_user_retrying "$1"; }
+
+# Shared mechanism: _delete_user_retrying NAME [--remove]
+_delete_user_retrying() {
 	local u=$1 i
+	shift
 	user_exists "$u" || return 0
 	loginctl terminate-user "$u" 2>/dev/null || true
 	for i in {1..20}; do
-		userdel --remove "$u" 2>/dev/null || true
+		userdel "$@" "$u" 2>/dev/null || true
 		user_exists "$u" || return 0
 		sleep 0.5
 	done

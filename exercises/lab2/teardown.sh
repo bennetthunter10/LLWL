@@ -160,8 +160,7 @@ for u in "${users[@]}"; do
 		delete_user "$u" || warn "$u is still there; remove it by hand once its processes are gone"
 	else
 		info "deleting user $u (keeping its home directory)"
-		loginctl terminate-user "$u" 2>/dev/null || true
-		userdel "$u" || warn "could not delete $u"
+		delete_user_keep_home "$u" || warn "$u is still there; remove it by hand once its processes are gone"
 		[[ -d $h && $h != /nonexistent ]] &&
 			warn "left $h in place -- it does not look like a lab home directory; remove it yourself if you are sure"
 	fi
@@ -184,17 +183,31 @@ for g in "${groups[@]}"; do
 		continue
 	fi
 	getent group "$g" >/dev/null || continue
+	# Another planted lab may have written down a claim on this group (lab 1
+	# records llwlops whether or not it created it). Reading that claim is not
+	# guessing; deleting the group would break that lab.
+	claimed_by=""
+	for other in "$LAB_STATE"/lab*.manifest; do
+		[[ -f $other && $other != "$MANIFEST" ]] || continue
+		grep --quiet --line-regexp --fixed-strings "group $g" "$other" && claimed_by=$other
+	done
+	if [[ -n $claimed_by ]]; then
+		warn "group $g left in place -- $claimed_by also claims it, so another lab still needs it"
+		continue
+	fi
 	members=$(getent group "$g" | cut -d: -f4)
 	if [[ -n $members ]]; then
 		IFS=',' read -r -a member_list <<<"$members"
 		for m in "${member_list[@]}"; do
 			[[ -n $m ]] || continue
 			info "removing $m from $g"
-			gpasswd --delete "$m" "$g" >/dev/null
+			gpasswd --delete "$m" "$g" >/dev/null ||
+				warn "could not remove $m from $g -- check with: getent group $g"
 		done
 	fi
 	info "deleting group $g"
-	groupdel "$g"
+	groupdel "$g" ||
+		warn "could not delete group $g (is it someone's primary group, or does it still have members?) -- left in place; review with: getent group $g"
 done
 
 # ---------------------------------------------------------------------------
