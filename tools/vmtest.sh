@@ -103,7 +103,7 @@ VM_ROOT "$LAB_DIR/teardown.sh" || fatal "teardown.sh exited non-zero"
 leftovers=$(VM bash -c "
 	getent passwd | grep -E '^llwl' || true
 	getent group  | grep -E '^llwl' || true
-	ls -d /srv/llwl* /etc/llwl* /var/log/llwl* /var/lib/llwl-* 2>/dev/null || true
+	ls -d /srv/llwl* /etc/llwl* /var/log/llwl* /var/lib/llwl-* /home/llwl* 2>/dev/null || true
 	ls /etc/systemd/system/llwl-* 2>/dev/null || true
 	ls /etc/sudoers.d/llwl-* 2>/dev/null || true
 ")
