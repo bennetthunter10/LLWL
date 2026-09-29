@@ -44,6 +44,7 @@ VM() { orb -m "$MACHINE" "$@"; }
 VM_ROOT() { orb -m "$MACHINE" sudo -- "$@"; }
 
 fatal() { printf '\033[31mFAIL\033[0m  %s\n' "$1" >&2; exit 1; }
+info() { printf '\033[33mNOTE\033[0m  %s\n' "$1"; }
 step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 
 # Create the machine on first use. A real VM is required (not a container)
@@ -70,8 +71,23 @@ VM find "/tmp/llwl/exercises/$LAB/solutions" -name '*.sh' -exec chmod +x {} +
 
 LAB_DIR=/tmp/llwl/exercises/$LAB
 
+# Who owns which mess. teardown.sh promises to remove what setup.sh created and
+# nothing else, so the harness measures exactly that: names present before and
+# after setup.sh are the lab's; names that turn up later are the learner's (here,
+# the reference solution's) and teardown deliberately leaves the groups among
+# them alone. The pipelines run inside the machine because the host's cut is
+# BSD and has no long flags; comm runs on the host, so it gets BSD's short flags.
+db_names() { VM bash -c "getent $1 | cut --delimiter=: --fields=1 | sort"; }
+only_in_second() { comm -13 <(printf '%s\n' "$1") <(printf '%s\n' "$2"); }
+in_both() { comm -12 <(printf '%s\n' "$1") <(printf '%s\n' "$2"); }
+
+groups_pre=$(db_names group)
+
 step "1. plant"
 VM_ROOT "$LAB_DIR/setup.sh" || fatal "setup.sh failed on a fresh machine"
+groups_post_setup=$(db_names group)
+users_post_setup=$(db_names passwd)
+lab_groups=$(only_in_second "$groups_pre" "$groups_post_setup")
 
 # Run check.sh and require that it failed *by reporting symptoms*. "Non-zero"
 # alone is not enough: orb failing, a missing file, a syntax error (exit 2) or a
@@ -91,16 +107,12 @@ step "2. check must FAIL on a freshly planted lab"
 expect_check_failure "check.sh passed on a freshly planted lab -- nothing is actually broken"
 
 step "3. the reference solution must take it to green"
-# The pipeline runs inside the machine: the host's cut is BSD and has no long flags.
-group_names() { VM bash -c "getent group | cut --delimiter=: --fields=1 | sort"; }
-groups_before=$(group_names)
 VM_ROOT "$LAB_DIR/solutions/bennett.sh" || fatal "solutions/bennett.sh exited non-zero"
-# Groups the solution brought into being. Some are the lab's (an account's
-# private group goes with the account); the ones the learner invented are not
-# the lab's, so teardown must leave them behind. Step 5 cleans up whichever
-# are left.
-# comm runs on the host here, so it gets BSD's short flags.
-invented_groups=$(comm -13 <(printf '%s\n' "$groups_before") <(group_names))
+# What the solution created is the learner's. Accounts it made take their
+# private group with them when deleted, so teardown owes a clean-up of those
+# (see step 5); any other group is the learner's own design and is left alone.
+learner_groups=$(only_in_second "$groups_post_setup" "$(db_names group)")
+learner_users=$(only_in_second "$users_post_setup" "$(db_names passwd)")
 VM bash -c "cd $LAB_DIR && ./check.sh" || fatal "check.sh still fails after bennett.sh"
 
 step "4. re-planting a SOLVED lab must break it again"
@@ -110,14 +122,34 @@ expect_check_failure "setup.sh did not reset a solved lab back to broken"
 step "5. teardown must leave nothing behind"
 VM_ROOT "$LAB_DIR/teardown.sh" || fatal "teardown.sh exited non-zero"
 
-# Teardown deliberately keeps groups it did not create. Remove those as the
-# learner would, so the leftover scan below still means "nothing of the lab's".
-for g in $invented_groups; do
-	if VM getent group "$g" >/dev/null; then VM_ROOT groupdel "$g"; fi
-done
+groups_final=$(db_names group)
+
+# What teardown promises: no group that setup.sh created survives it.
+lab_survivors=$(in_both "$lab_groups" "$groups_final")
+if [[ -n $lab_survivors ]]; then
+	printf '%s\n' "$lab_survivors"
+	fatal "teardown left the above groups behind, and setup.sh created them"
+fi
+
+# The private group of an account the learner made goes with the account: userdel
+# removes it, and teardown deletes the account. A survivor means teardown broke
+# that, even though the group itself is not setup.sh's.
+account_groups=$(in_both "$learner_users" "$groups_final")
+if [[ -n $account_groups ]]; then
+	printf '%s\n' "$account_groups"
+	fatal "teardown left the private groups of accounts it deleted"
+fi
+
+# Everything else the solution made is the learner's design. Report, never fail
+# and never delete: a harness that tidies up in order to pass hides the day
+# teardown stops removing something it does own.
+kept=$(in_both "$learner_groups" "$groups_final")
+if [[ -n $kept ]]; then
+	info "left behind by design (learner-created groups; teardown does not delete them): $(tr '\n' ' ' <<<"$kept")"
+fi
+
 leftovers=$(VM bash -c "
 	getent passwd | grep -E '^llwl' || true
-	getent group  | grep -E '^llwl' || true
 	ls -d /srv/llwl* /etc/llwl* /var/log/llwl* /var/lib/llwl-* /home/llwl* 2>/dev/null || true
 	ls /etc/systemd/system/llwl-* 2>/dev/null || true
 	ls /etc/sudoers.d/llwl-* 2>/dev/null || true
