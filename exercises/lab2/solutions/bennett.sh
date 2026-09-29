@@ -134,6 +134,34 @@ if ! visudo --check --quiet; then
 	die "installing my rule broke sudo's configuration; removed it again. Run 'sudo visudo -c' to see what else is wrong"
 fi
 
-# ... tiers appended by later tasks ...
+# --- Tier 4 (optional): when mode bits run out ------------------------------
+#
+# shared/ has three audiences and mode bits have room for one group. Alpha
+# writes, beta reads, nobody else gets in. There is no chmod that says that.
+#
+# The `--default` entries are the ones that matter. Without them this is correct
+# today and wrong tomorrow, in exactly the way the tier 2 setgid bit was about.
+
+if ! command -v setfacl >/dev/null 2>&1; then
+	warn "tier 4 needs the acl package: sudo apt install acl -- skipping"
+else
+	chown root:llwlalpha /srv/llwl-projects/shared
+	chmod 2770 /srv/llwl-projects/shared
+	chgrp --recursive llwlalpha /srv/llwl-projects/shared
+	chmod 0660 /srv/llwl-projects/shared/handbook.md
+
+	# Beta gets read and traverse on the directory, read on its contents, and
+	# the same for everything created here from now on.
+	setfacl --modify=group:llwlbeta:r-x /srv/llwl-projects/shared
+	setfacl --default --modify=group:llwlbeta:r-- /srv/llwl-projects/shared
+	setfacl --default --modify=group:llwlalpha:rw- /srv/llwl-projects/shared
+	setfacl --default --modify=other::--- /srv/llwl-projects/shared
+
+	# Anything already in here predates the ACL, same as the group did in tier 2.
+	setfacl --recursive --modify=group:llwlbeta:r-- /srv/llwl-projects/shared
+	# ...which also stripped the directory's own x from beta. Put it back.
+	setfacl --modify=group:llwlbeta:r-x /srv/llwl-projects/shared
+fi
+
 
 info "lab 2 solved. Run ./check.sh as yourself."

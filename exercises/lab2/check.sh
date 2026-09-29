@@ -262,7 +262,67 @@ if want_tier 3; then
 	fi
 fi
 
-# ... tiers appended by later tasks ...
+# ---------------------------------------------------------------------------
+# Tier 4 -- optional: when mode bits run out
+# ---------------------------------------------------------------------------
+
+if want_tier 4; then
+	section "Tier 4 (optional) -- when mode bits run out"
+
+	# Missing tooling is not the learner's mistake, so this skips rather than
+	# fails. The two causes need different advice, so tell them apart.
+	if ! have_working_acls "$PROJ_DIR"; then
+		skip "no working ACL support here"
+		if ! command -v setfacl >/dev/null 2>&1; then
+			note "setfacl is not installed:  sudo apt install acl"
+		else
+			note "$PROJ_DIR is on a filesystem mounted without ACL support; check 'findmnt -no OPTIONS -T $PROJ_DIR'"
+		fi
+	else
+		# Every check asks what somebody can DO. Nothing here looks at a group
+		# name or at a getfacl entry for a named group: the learner chose his
+		# own groups, and a check that looked for them would fail a right answer.
+		if can_user_create "$MIRA" "$SHARED"; then
+			pass "$MIRA can add to $SHARED"
+		else
+			fail "$MIRA cannot add to $SHARED; alpha maintains the shared handbook"
+		fi
+
+		# The whole point of tier 4 is files that do not exist yet. Create one
+		# now, as Mira, and see whether Toby can read it -- a one-off setfacl
+		# over what was already there will not survive this.
+		probe=$SHARED/.llwl-inherit-probe-$$
+		if sudo -n -u "$MIRA" touch -- "$probe" 2>/dev/null; then
+			if can_user_read "$TOBY" "$probe"; then
+				pass "a file $MIRA creates in $SHARED today is readable by $TOBY"
+			else
+				fail "$TOBY cannot read a file $MIRA just created in $SHARED; whatever you set applies to the files that were already there, not to the ones that arrive tomorrow"
+			fi
+			if can_user_write "$TOBY" "$probe"; then
+				fail "$TOBY can write a file in $SHARED; beta reads the handbook, alpha maintains it"
+			else
+				pass "$TOBY cannot write in $SHARED"
+			fi
+			sudo -n rm -f -- "$probe" 2>/dev/null || true
+		else
+			fail "$MIRA could not create a probe file in $SHARED"
+		fi
+
+		if can_user_list "$REPORT_USER" "$SHARED" || can_user_traverse "$REPORT_USER" "$SHARED"; then
+			fail "the $REPORT_USER service account can get into $SHARED"
+		else
+			pass "$REPORT_USER is kept out of $SHARED"
+		fi
+
+		# The one place this looks at the ACL text itself, and only for the fact
+		# that a default ACL exists, never for who is named in it.
+		if acl_of "$SHARED" | grep -q '^default:'; then
+			pass "$SHARED carries a default ACL, so new files inherit it"
+		else
+			fail "$SHARED has no default ACL; nothing makes tomorrow's files come out right"
+		fi
+	fi
+fi
 
 if [[ $TIER == main ]]; then
 	note "tier 4 is optional and was not run; try ./check.sh 4 when you want it"
