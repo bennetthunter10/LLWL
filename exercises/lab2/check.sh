@@ -143,7 +143,18 @@ if want_tier 2; then
 		local g
 		g=$(new_file_group "$owner" "$dir" || true)
 		if [[ -n ${g:-} && $g == "$(group_of "$dir")" ]]; then
-			pass "files $owner creates in $dir inherit the directory's group ($g)"
+			# The probe can be fooled in exactly one way, and it is detectable, so
+			# detect it: if the directory's group is also this account's own primary
+			# group, their new files come out with it whether or not the directory
+			# has the setgid bit -- and a colleague's would not. The question this
+			# tier asks is about the colleague, so in that one case fall back to
+			# asking for the bit. Every other case is still answered by what
+			# happened rather than by what the mode says.
+			if [[ $g == "$(id --name --group "$owner")" ]] && ! has_bits "$(mode_of "$dir")" 2000; then
+				fail "files $owner creates in $dir come out group $g only because it is $owner's primary group; a colleague's would not"
+			else
+				pass "files $owner creates in $dir inherit the directory's group ($g)"
+			fi
 		else
 			fail "a file $owner creates in $dir comes out group ${g:-unknown}, but the directory's group is $(group_of "$dir"); in six months half this tree will be unreadable to the team"
 		fi
@@ -254,6 +265,31 @@ if want_tier 3; then
 			pass "the sudo policy does not let $NADIA run arbitrary systemctl subcommands"
 		fi
 
+		# The tier asks for one power, on one unit, and everything above measures
+		# only the subcommand half of that. A rule spelled
+		# "NOPASSWD: /usr/bin/systemctl restart *" pins the verb and wildcards
+		# the unit: measured on Ubuntu 24.04, it refuses stop, mask and
+		# poweroff -- passing all three checks above -- and still reaches every
+		# unit on the machine, ssh and ufw and systemd-journald among them. So
+		# ask about the other half too: the verb she is allowed, against a unit
+		# she is not. Policy only, like the two checks above -- nothing here
+		# restarts or disables anything.
+		if sudo_permits "$NADIA" "$(command -v systemctl)" restart "$AUDIT_SVC"; then
+			fail "the policy lets $NADIA restart $AUDIT_SVC; the rule is scoped to a subcommand but not to a unit, so it reaches every service on this machine"
+		else
+			pass "$NADIA cannot restart $AUDIT_SVC"
+		fi
+
+		# Asked of the policy for the same reason as mask: disabling a unit
+		# changes nothing until the next boot, so an attempt would leave the
+		# machine in a state this checker would have to undo and then trust its
+		# own undo.
+		if sudo_permits "$NADIA" "$(command -v systemctl)" disable "$AUDIT_SVC"; then
+			fail "the policy lets $NADIA disable $AUDIT_SVC; a disabled unit keeps running until the machine reboots and then never comes back"
+		else
+			pass "$NADIA cannot disable $AUDIT_SVC"
+		fi
+
 		if can_user_read "$NADIA" "$SECRETS"; then
 			fail "$NADIA can read $SECRETS; being on call for a service is not the same as being trusted with its credentials"
 		else
@@ -277,9 +313,15 @@ fi
 if want_tier 4; then
 	section "Tier 4 (optional) -- when mode bits run out"
 
-	# Missing tooling is not the learner's mistake, so this skips rather than
-	# fails. The two causes need different advice, so tell them apart.
-	if ! have_working_acls "$PROJ_DIR"; then
+	# $SHARED is not in the preflight at the top of this file, because tiers 1-3
+	# never touch it. Ask here instead: without this, a learner who deleted the
+	# directory is told that Mira cannot add to it, which reads as a verdict on
+	# their group design rather than on a directory that is not there.
+	if [[ ! -d $SHARED ]]; then
+		fail "$SHARED is missing, and it is the whole subject of this tier; put it back with:  sudo $HERE/setup.sh"
+	# Missing tooling is not the learner's mistake, so the ACL case skips
+	# rather than fails. Its two causes need different advice, so tell them apart.
+	elif ! have_working_acls "$PROJ_DIR"; then
 		skip "no working ACL support here"
 		if ! command -v setfacl >/dev/null 2>&1; then
 			note "setfacl is not installed:  sudo apt install acl"

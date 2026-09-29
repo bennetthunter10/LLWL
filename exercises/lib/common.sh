@@ -192,9 +192,23 @@ login_shell_of() { getent passwd "$1" | cut -d: -f7; }
 # Observed on Ubuntu 24.04 (Sep 2026): with the expiry set to today's day number,
 # `su` refuses with "Your account has expired"; set to tomorrow, it is allowed.
 # So "expired" means exp <= today. (shadow counts UTC days, so use `date +%s`.)
+#
+# Three answers, not two: 0 expired, 1 not expired, 2 cannot tell. Reading
+# /etc/shadow needs root, and every other probe in this file can answer a
+# missing sudo ticket with "no, they cannot", which is honest whatever the
+# truth is. This one cannot: "no" here means "not expired", which is a claim
+# about the ACCOUNT rather than about us, and it is the wrong one. A caller
+# that got it would report an expired account as a problem with the login
+# shell, and nobody can get from that message back to the real cause. So say
+# so out loud and answer 2 -- still false to `if`, for every caller that only
+# wants yes or no, but not a lie.
 account_expired() {
 	local exp today
 	user_exists "$1" || return 1
+	if [[ $EUID -ne 0 ]] && ! sudo -n true 2>/dev/null; then
+		warn "cannot read $1's expiry date: that needs root and there is no sudo ticket. Run 'sudo -v' and try again -- until then an expired account is indistinguishable from a working one."
+		return 2
+	fi
 	exp=$(sudo -n getent shadow "$1" 2>/dev/null | cut -d: -f8)
 	[[ -n $exp ]] || return 1
 	today=$(($(date +%s) / 86400))
@@ -209,12 +223,14 @@ account_expired() {
 #
 # What sudo does catch is the OTHER planted defect, and not by inspecting the
 # shell -- it execs it, and /usr/sbin/nologin is a program that prints "This
-# account is currently not available." and exits non-zero (nologin(8)). Nothing
-# on that path consults the target's expiry date. `su - <expired-user>` does,
-# and refuses with "Your account has expired; please contact your system
-# administrator." / "su: Authentication failure", as would a console or ssh
-# login. So without the guard this probe would say "can log in" for someone who
-# cannot. Do not replace the guard with a claim about what sudo "cannot" do.
+# account is currently not available." and exits non-zero (nologin(8)). What
+# sudo does NOT do is refuse on the target's expiry date -- that is the
+# measured outcome, and whether anything on that path so much as reads the
+# date was not measured at all. `su - <expired-user>` does refuse, with "Your
+# account has expired; please contact your system administrator." / "su:
+# Authentication failure". So without the guard this probe would say "can log
+# in" for someone who cannot. Do not replace the guard with a claim about what
+# sudo "cannot" do.
 #
 # Side effect: `sudo -i` opens a real login session, so systemd starts a
 # per-user manager for the target, and it outlives this call by a moment.
@@ -249,7 +265,7 @@ _delete_user_retrying() {
 	user_exists "$u" || return 0
 	loginctl terminate-user "$u" 2>/dev/null || true
 	for _ in {1..20}; do
-		userdel "$@" "$u" 2>/dev/null || true
+		userdel "$@" -- "$u" 2>/dev/null || true
 		user_exists "$u" || return 0
 		sleep 0.5
 	done

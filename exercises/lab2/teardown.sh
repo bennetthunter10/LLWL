@@ -30,6 +30,8 @@ source "$HERE/../lib/common.sh"
 LAB_STATE=/var/lib/llwl-labs
 MANIFEST=$LAB_STATE/lab2.manifest
 
+SUDOERS_DROPIN=/etc/sudoers.d/llwl-oncall
+
 # The only things this script is ever allowed to touch. Exact names, not
 # patterns: a pattern like llwl* would also match an account somebody else made.
 ALLOWED=(
@@ -39,7 +41,7 @@ ALLOWED=(
 	/srv/llwl-projects
 	/etc/systemd/system/llwl-report.service
 	/etc/systemd/system/llwl-audit.service
-	/etc/sudoers.d/llwl-oncall
+	"$SUDOERS_DROPIN"
 )
 ALLOWED_UNITS=(llwl-report.service llwl-audit.service)
 ALLOWED_USERS=(llwlmira llwltoby llwlnadia llwlreport)
@@ -98,7 +100,19 @@ if [[ -f $MANIFEST ]]; then
 else
 	warn "no manifest at $MANIFEST -- falling back to the default lab 2 layout"
 	units=("${ALLOWED_UNITS[@]}")
-	paths=("${ALLOWED[@]}")
+	# Every allowed path except the sudoers drop-in, which is the one path in
+	# this lab where being wrong costs somebody their access to the machine
+	# rather than a practice file. setup.sh refuses to OVERWRITE that file
+	# unless a manifest says this lab wrote it; with no manifest there is no
+	# such record, so this refuses to DELETE it, and the two halves of the lab
+	# hold one policy about it instead of two. Say so and leave it for a human.
+	paths=()
+	for p in "${ALLOWED[@]}"; do
+		[[ $p == "$SUDOERS_DROPIN" ]] || paths+=("$p")
+	done
+	if [[ -e $SUDOERS_DROPIN || -L $SUDOERS_DROPIN ]]; then
+		warn "NOTE: $SUDOERS_DROPIN left in place. With no manifest there is no record that this lab wrote it, and a sudoers file somebody relies on is not something to delete on a guess. Read it and remove it yourself if it is the lab's: sudo cat $SUDOERS_DROPIN"
+	fi
 	users=("${ALLOWED_USERS[@]}")
 	# Groups are never deleted without a manifest. It is the only record of who
 	# created llwlops, and deleting as root on a guess is the habit this repo

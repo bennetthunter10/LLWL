@@ -42,10 +42,19 @@ MANIFEST=$LAB_STATE/lab2.manifest
 
 need_linux
 need_root
+# Everything below this line that is not a shell builtin. The whole list is
+# asked for before the first change, because the alternative is a tool that
+# turns out to be missing halfway through: under set -e that leaves a
+# half-planted lab, and this script writes to /etc/sudoers.d. One line of
+# refusal before anything is touched is worth a great deal more than that.
 need_cmd systemctl
 need_cmd useradd
 need_cmd usermod
+need_cmd userdel  # reached through delete_user, when Nadia is reset away
+need_cmd groupadd
+need_cmd gpasswd
 need_cmd chage
+need_cmd install
 need_cmd visudo
 
 # ---------------------------------------------------------------------------
@@ -302,6 +311,13 @@ chown --recursive root:root "$PROJ_DIR"
 # The a-st half matters: a numeric 0755 on a directory leaves a setgid bit that
 # is already there, and the setgid bit is exactly what tier 2 is about.
 chmod a-st,u=rwx,go=rx "$PROJ_DIR" "$PROJ_DIR/alpha" "$PROJ_DIR/beta" "$PROJ_DIR/shared"
+# Those four are the only directories this script creates, and a learner may
+# have made more inside the tree with setgid bits of their own. "Every line
+# here RESETS" has to be true of those too, or a re-plant leaves directories
+# standing that still hand their group to every file made in them, in a lab
+# that is supposed to be back to broken. Only s and t are stripped: the modes
+# of the learner's own directories are theirs, and are not what tier 2 asks about.
+find "$PROJ_DIR" -type d -exec chmod a-st {} +
 chmod 0644 "$PROJ_DIR/alpha/README" "$PROJ_DIR/beta/README" "$PROJ_DIR/shared/handbook.md"
 
 # ---------------------------------------------------------------------------

@@ -255,9 +255,13 @@ One preference of mine, offered as a preference and not as a rule: I like the de
 `getent group <name>` can answer "who is on alpha". That quietly rules something out. A group
 that is somebody's **primary** group does not list them in the member field of `/etc/group` —
 make `llwlalpha` Mira's primary group and `getent group llwlalpha` comes back with an empty
-member list, while `id llwlmira` shows the membership plainly. The checker does not mind either
-way: a primary-group design passes tier 2 exactly as a supplementary-group one does, because
-every check asks what the accounts can *do*. Which is the whole point of the tier.
+member list, while `id llwlmira` shows the membership plainly. Both designs can pass tier 2 —
+every check asks what the accounts can *do*, not what anything is called — but neither of them
+gets to skip the setgid bit. Make the team group Mira's primary group and leave the bit off, and
+her new files come out with that group because it is *hers*, not because the directory said so;
+the first colleague you add to the team gets none of it. The question the check is really asking
+is what a *colleague's* file would inherit tomorrow, so in exactly that case it falls back to
+looking for the bit.
 But "who is on this project" is a question somebody will ask you at 4pm on a Friday, and a design
 where the answer is one command is worth something.
 
@@ -372,6 +376,12 @@ Four beats, in order:
    `./check.sh 3` also asks the policy — not just the behaviour — whether Nadia could still run
    an arbitrary `systemctl` subcommand, using the same `sudo -l -U <user> <command>` form you
    just used. A rule that happens to behave today but still says "any arguments" does not pass.
+   It asks about the unit as well as the verb. A rule that pins the subcommand and wildcards the
+   unit — `systemctl restart *` — refuses `stop` and `poweroff` and still restarts anything on the
+   machine, `ssh` included, so it does not pass either. (Careful with the other half of that: a
+   rule ending `systemctl restart`, with nothing at all after the verb, is not "restart anything".
+   Arguments were specified, so that is the only argument list it permits — the "any arguments"
+   rule is the one with *no* arguments written, which is the planted one.)
 
 The `0440 root:root` is not decoration, and `check.sh` asserts both halves of it. A sudoers file
 is a file that decides who is root, so the rules about who may edit it are enforced by sudo

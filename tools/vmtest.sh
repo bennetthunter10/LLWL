@@ -125,6 +125,14 @@ groups_post_setup=$(db_names group)
 users_post_setup=$(db_names passwd)
 lab_groups=$(only_in_second "$groups_pre" "$groups_post_setup")
 
+# A FAIL token at the START of a result line, not the word anywhere in the
+# output: a PASS line whose message happens to contain "FAIL" satisfies a
+# substring match, and would let a checker that reported no symptom at all
+# through the must-fail steps below. check.sh colours the token when it has a
+# terminal and not when it is captured like this, so allow for either.
+ESC=$'\033'
+printed_a_fail() { grep --quiet --extended-regexp "^[[:space:]]*(${ESC}\[[0-9;]*m)?FAIL" <<<"$1"; }
+
 # Run check.sh and require that it failed *by reporting symptoms*. "Non-zero"
 # alone is not enough: orb failing, a missing file, a syntax error (exit 2) or a
 # crash (126, 127, a signal) are all non-zero too, and would let a broken lab or a
@@ -136,7 +144,7 @@ expect_check_failure() {
 	printf '%s\n' "$check_output"
 	((status != 0)) || fatal "$1"
 	((status == 1)) || fatal "check.sh exited $status, not 1 -- it crashed or could not run rather than reporting symptoms"
-	grep --quiet 'FAIL' <<<"$check_output" || fatal "check.sh exited 1 but printed no FAIL line -- it is not reporting symptoms"
+	printed_a_fail "$check_output" || fatal "check.sh exited 1 but printed no FAIL line -- it is not reporting symptoms"
 }
 
 step "2. check must FAIL on a freshly planted lab"

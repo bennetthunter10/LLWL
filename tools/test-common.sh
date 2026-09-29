@@ -29,8 +29,32 @@ useradd --create-home --shell /bin/bash --groups llwltmpg "$U"
 useradd --create-home --shell /usr/sbin/nologin "$V"
 mkdir -p "$D"
 
-ok() { if "$@"; then pass "$*"; else fail "$*"; fi; }
-no() { if "$@"; then fail "NOT $*"; else pass "NOT $*"; fi; }
+# 127 is "no such command", which for these tests means the helper is not
+# there at all -- a renamed or deleted function. To `no()` that looks exactly
+# like a probe answering "no", so a whole file of tests would go green over a
+# library that no longer exists. Tell the two apart and fail loudly.
+ok() {
+	local rc=0
+	"$@" || rc=$?
+	if ((rc == 127)); then
+		fail "$* -- no such helper (exit 127); the function is missing, not answering"
+	elif ((rc == 0)); then
+		pass "$*"
+	else
+		fail "$*"
+	fi
+}
+no() {
+	local rc=0
+	"$@" || rc=$?
+	if ((rc == 127)); then
+		fail "NOT $* -- no such helper (exit 127); the function is missing, not answering"
+	elif ((rc == 0)); then
+		fail "NOT $*"
+	else
+		pass "NOT $*"
+	fi
+}
 
 section "existence"
 ok user_exists "$U"

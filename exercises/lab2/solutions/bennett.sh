@@ -87,7 +87,7 @@ chmod 0755 /srv/llwl-projects
 # it. sudo takes a command with no arguments to mean *any* arguments, so that
 # rule is not "restart the reporting service" -- it is "run any systemctl
 # subcommand against any unit on this machine as root", which includes stopping
-# the firewall and masking the audit agent.
+# the firewall and disabling the audit agent.
 #
 # What I want instead is one command, spelled out in full, with its arguments
 # fixed. A Cmnd_Alias is not strictly necessary for one command, but it gives
