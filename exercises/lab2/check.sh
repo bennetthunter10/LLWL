@@ -219,6 +219,8 @@ if want_tier 3; then
 		# Masking is tested by asking the policy rather than by doing it: on a
 		# unit whose file lives in /etc/systemd/system, systemctl mask refuses
 		# ("File exists") even for root, so an attempt would prove nothing.
+		# It would fail on the broken rule and the fixed rule alike, and the
+		# check would pass every time. Do not turn this back into an attempt.
 		if sudo_permits "$NADIA" "$(command -v systemctl)" mask "$AUDIT_SVC"; then
 			fail "$NADIA could mask $AUDIT_SVC; masking a unit is how you make a service unstartable until somebody works out why"
 		else

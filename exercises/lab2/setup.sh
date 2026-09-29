@@ -49,6 +49,28 @@ need_cmd chage
 need_cmd visudo
 
 # ---------------------------------------------------------------------------
+# 0. Whose is the sudoers drop-in? Decided before anything is changed, and
+#    before the manifest below is rewritten.
+#
+#    This lab promises never to modify a file it did not create, and
+#    /etc/sudoers.d is the last place to break that promise. The filename is
+#    fixed, but that is no licence to clobber somebody else's file. So: if the
+#    manifest from a previous plant claims the drop-in, the lab made it and a
+#    re-plant may replace it; if it does not exist, the lab will make it; if it
+#    exists and nobody here claims it, stop and leave it exactly as it is.
+#    (Same idea as the llwlops group in section 2, and it has to be settled
+#    early for the same reason: the manifest is rewritten every run, and a
+#    refusal that happened after that would leave a claim on somebody else's
+#    file.)
+# ---------------------------------------------------------------------------
+
+if [[ -e $SUDOERS_DROPIN || -L $SUDOERS_DROPIN ]]; then
+	if ! { [[ -f $MANIFEST ]] && grep --quiet --line-regexp --fixed-strings "path $SUDOERS_DROPIN" "$MANIFEST"; }; then
+		die "$SUDOERS_DROPIN already exists and this lab did not create it. It will not overwrite a sudoers file it does not own. Move it aside (sudo mv $SUDOERS_DROPIN $SUDOERS_DROPIN.orig) and run setup.sh again."
+	fi
+fi
+
+# ---------------------------------------------------------------------------
 # 1. Stop anything from a previous planting, so a re-run is a true reset.
 # ---------------------------------------------------------------------------
 
@@ -322,10 +344,10 @@ write_manifest
 # that sudo cannot parse can cost you sudo on the whole machine, and this lab
 # refuses to be the thing that does that to somebody.
 #
-# This is the one file in the lab that RESETS rather than only creates. The path
-# is the lab's own (it is in the manifest and teardown owns it), and on a re-run
-# from a solved lab the learner's tightened rule has to give way to the
-# over-broad one. What is deliberately left alone: the llwloncall group the
+# This is the one file in the lab that RESETS rather than only creates, and only
+# because section 0 established that the lab made it (the manifest claims it):
+# on a re-run from a solved lab the learner's tightened rule has to give way to
+# the over-broad one. A file the lab did not make never reaches this point. What is deliberately left alone: the llwloncall group the
 # learner may have made. Like his project groups, it is his.
 # ---------------------------------------------------------------------------
 
