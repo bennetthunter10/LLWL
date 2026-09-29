@@ -388,3 +388,30 @@ if ! visudo --check --quiet; then
 	rm -f "$SUDOERS_DROPIN"
 	die "installing the drop-in broke sudo's configuration; removed it again"
 fi
+
+# ---------------------------------------------------------------------------
+# 8. Briefing. Last, so that it only ever prints after every step above has
+#    succeeded -- set -e means a failure anywhere never reaches this point, and
+#    "Lab 2 is planted" should never appear over a half-planted lab.
+# ---------------------------------------------------------------------------
+
+cat <<BRIEF
+
+${C_BOLD}Lab 2 is planted.${C_OFF}
+
+  The team grew. Three people need accounts on this machine, two of them
+  already exist and were made carelessly, and the previous admin left a sudo
+  rule behind that does not do what its comment says.
+
+  Start here:
+      ./check.sh 1
+      getent passwd | grep llwl
+      sudo -l -U llwlnadia
+
+  Read ./README.md for the tiers and the ground rules -- especially the ones
+  about editing sudoers files, which are the only way this lab can cost you
+  an evening.
+
+  Undo everything at any time with:  sudo ./teardown.sh
+
+BRIEF
