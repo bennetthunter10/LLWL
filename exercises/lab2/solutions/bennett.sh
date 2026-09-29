@@ -76,7 +76,8 @@ chgrp --recursive llwlbeta /srv/llwl-projects/beta
 chmod 0660 /srv/llwl-projects/alpha/README /srv/llwl-projects/beta/README
 
 # The parent has to be traversable or nothing below it is reachable, but it
-# does not have to be listable by strangers.
+# holds nothing secret, so 0755 is fine: anybody can see that alpha and beta
+# exist, and the two directories' own modes decide who can get inside them.
 chown root:root /srv/llwl-projects
 chmod 0755 /srv/llwl-projects
 

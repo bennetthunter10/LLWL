@@ -76,12 +76,27 @@ LAB_DIR=/tmp/llwl/exercises/$LAB
 # after setup.sh are the lab's; names that turn up later are the learner's (here,
 # the reference solution's) and teardown deliberately leaves the groups among
 # them alone. The pipelines run inside the machine because the host's cut is
-# BSD and has no long flags; comm runs on the host, so it gets BSD's short flags.
-db_names() { VM bash -c "getent $1 | cut --delimiter=: --fields=1 | sort"; }
-only_in_second() { comm -13 <(printf '%s\n' "$1") <(printf '%s\n' "$2"); }
-in_both() { comm -12 <(printf '%s\n' "$1") <(printf '%s\n' "$2"); }
+# BSD and has no long flags.
+#
+# The set operations use grep, not comm: comm needs both inputs sorted in the
+# same locale, and the VM's sort and the host's disagree about names like _ssh,
+# which made an ordinary system group look like a leak.
+db_names() { VM bash -c "getent $1 | cut --delimiter=: --fields=1"; }
+only_in_second() { grep --invert-match --line-regexp --fixed-strings --file=<(printf '%s\n' "$1") <<<"$2" || true; }
+in_both() { grep --line-regexp --fixed-strings --file=<(printf '%s\n' "$1") <<<"$2" || true; }
+
+# A "nothing leaked" verdict is only worth something if the machine started with
+# nothing to leak. Anything llwl* that is already here (a group a previous run
+# left, or a real leak from a teardown regression) would sit in the "before"
+# snapshot, be classified as nobody's, and vanish from every assertion below.
+stale=$(VM bash -c "{ getent passwd; getent group; } | cut --delimiter=: --fields=1 | grep '^llwl' || true")
+if [[ -n $stale ]]; then
+	printf '%s\n' "$stale"
+	fatal "the machine is not clean: the llwl* names above already exist. Remove them (tear down the lab, then groupdel any group teardown leaves) and re-run"
+fi
 
 groups_pre=$(db_names group)
+users_pre=$(db_names passwd)
 
 step "1. plant"
 VM_ROOT "$LAB_DIR/setup.sh" || fatal "setup.sh failed on a fresh machine"
@@ -138,6 +153,22 @@ account_groups=$(in_both "$learner_users" "$groups_final")
 if [[ -n $account_groups ]]; then
 	printf '%s\n' "$account_groups"
 	fatal "teardown left the private groups of accounts it deleted"
+fi
+
+# The backstop, and the assertion that cannot be evaded by classification: after
+# teardown the machine may hold only what it held before, plus groups the
+# learner made. Anything else is a leak, whoever's it is, and whichever step
+# (including the step-4 re-plant) made it. Accounts get no allowance at all,
+# since teardown deletes the ones the solution created too.
+unexpected_groups=$(only_in_second "$(printf '%s\n%s\n' "$groups_pre" "$learner_groups")" "$groups_final")
+if [[ -n $unexpected_groups ]]; then
+	printf '%s\n' "$unexpected_groups"
+	fatal "teardown left groups that were neither there before nor made by the learner"
+fi
+unexpected_users=$(only_in_second "$users_pre" "$(db_names passwd)")
+if [[ -n $unexpected_users ]]; then
+	printf '%s\n' "$unexpected_users"
+	fatal "teardown left accounts that were not there before the lab"
 fi
 
 # Everything else the solution made is the learner's design. Report, never fail

@@ -132,7 +132,7 @@ if want_tier 2; then
 		if can_user_create "$owner" "$dir"; then
 			pass "$owner can create files in $dir"
 		else
-			fail "$owner cannot create files in $dir ($(owner_of "$dir"), mode $(mode_of "$dir")); it is supposed to be her team's working directory"
+			fail "$owner cannot create files in $dir ($(owner_of "$dir"), mode $(mode_of "$dir")); it is supposed to be the team's working directory"
 			return
 		fi
 
@@ -143,7 +143,7 @@ if want_tier 2; then
 		if [[ -n ${g:-} && $g == "$(group_of "$dir")" ]]; then
 			pass "files $owner creates in $dir inherit the directory's group ($g)"
 		else
-			fail "a file $owner creates in $dir comes out group ${g:-unknown}, but the directory's group is $(group_of "$dir"); in six months half this tree will be unreadable to her own team"
+			fail "a file $owner creates in $dir comes out group ${g:-unknown}, but the directory's group is $(group_of "$dir"); in six months half this tree will be unreadable to the team"
 		fi
 
 		if can_user_list "$stranger" "$dir" || can_user_traverse "$stranger" "$dir"; then
