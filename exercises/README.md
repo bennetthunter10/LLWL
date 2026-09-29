@@ -10,7 +10,7 @@ Every lab ships the same four scripts, so you only have to learn the workflow on
 | Script | Run as | What it does |
 |---|---|---|
 | `setup.sh` | `sudo` | Plants the lab. Only ever **creates** new paths — never touches a file that was already on your system. Records everything in `/var/lib/llwl-labs/<lab>.manifest`. Re-run it any time to reset the lab. |
-| `check.sh` | **you**, not root | Tells you what is still wrong, in symptoms rather than fixes. `./check.sh` runs everything, `./check.sh 2` runs one tier. Exit code 0 means solved. |
+| `check.sh` | **you**, not root | Tells you what is still wrong, in symptoms rather than fixes. `./check.sh` runs everything, `./check.sh 2` runs one tier. Exit code 0 means solved. From lab 2 onward it will ask for `sudo` once, because checking what *other* people's accounts can do requires root — it still never runs as root itself. |
 | `teardown.sh` | `sudo` | Removes everything from the manifest and leaves the machine as it was. |
 | `solutions/bennett.sh` | `sudo` | My answer. Read it *after* you're green, then argue with it. |
 
@@ -68,8 +68,27 @@ Copy the shape of `lab1`. Conventions:
   `has_bits`, `session_has_group`, …). Don't re-roll those.
 - These scripts are teaching material as much as tooling — the learner will read them. Comment the
   *why*, use long flags (`--gid`, not `-g`), and keep them boring.
-- `setup.sh` must be idempotent, must only create new paths, and must write a manifest.
-- `teardown.sh` must check every path it deletes against an allow-list before `rm -rf`, because it
-  runs as root. See `lab1/teardown.sh` for the pattern.
+- `setup.sh` must be idempotent, must only create new paths, and must write a manifest. It must
+  only remove what it created, and the manifest is the record of that: if a lab shares something
+  with another lab (lab 2 shares the `llwlops` group with lab 1), it writes a manifest line for it
+  only when it actually created it, and `teardown.sh` leaves alone anything another lab's manifest
+  also claims. Otherwise tearing down one lab breaks the other, and a learner is allowed to leave
+  a lab planted.
+- Manifest kinds are `path`, `unit`, `user`, `group`, `home` and `note`. `home` is a home
+  directory; `teardown.sh` only removes one when the account's name **and** its home location
+  *both* look like a lab's. `note` is free-form state the lab needs to remember between `setup.sh`
+  and `solutions/`, like the generated uid lab 2 keeps.
+- `teardown.sh` must check every manifest entry against an allow-list before acting on it —
+  paths before `rm -rf`, but also units, users and groups — because it runs as root and a manifest
+  is only a file on disk. A hand-edited or corrupted one that says `user root` or
+  `unit ssh.service` must be refused, not obeyed. See `lab2/teardown.sh` for the pattern.
 - `check.sh` reports symptoms, never fixes, and at least one check per lab should be **behavioural**
   — actually exercise the thing rather than compare a number, so it can't be gamed.
+- On a planted lab, `check.sh` must exit exactly 1 and print at least one `FAIL` line. The test
+  harness below matches that literal string, and `fail()` in `common.sh` is what prints it — so a
+  lab that uses the output helpers gets this for free, and one that hand-rolls its own output
+  breaks it without any error to tell you why.
+- Labs are verified with `tools/vmtest.sh <lab>`, which runs the whole lifecycle in a disposable
+  Ubuntu machine and asserts, in order: plant, then `check.sh` must fail; the reference solution
+  makes it pass; re-planting the solved lab breaks it again; `teardown.sh` leaves nothing behind;
+  and the learner's `sudo` still works. Run it before opening a PR.

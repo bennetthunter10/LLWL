@@ -33,12 +33,13 @@ branch-and-PR flow, and the two rules that keep you from having to reinstall Ubu
 | Lab | What breaks | What you come out knowing |
 |---|---|---|
 | **1** | A deployed service that won't start | the shell, `ls -l`, `chmod`, `chown`, `find -perm`, `stat`, `systemctl`, `journalctl`, groups, setgid, sticky bit |
-| 2 | Processes and services | writing your own systemd unit, `enable`/`mask`, restart policies, debugging a crash loop, timers vs cron |
-| 3 | Text as data | `grep`, `cut`, `sort`, `uniq`, `awk`, `xargs`, pipes — answering real questions about a real 100k-line log |
-| 4 | Shell scripting for real | `set -euo pipefail`, `trap`, argument parsing, `--dry-run`, a backup script on a timer |
-| 5 | Disks and networking | `apt` vs `dpkg`, filesystems and `/etc/fstab`, `ip`, `ss`, `curl`, `ufw` |
-| 6 | Users and SSH | users, groups, `sudoers` drop-ins, key-only SSH, and why SSH refuses your private key |
-| 7 | Capstone | take a bare VM to a live TLS website — nginx, systemd, firewall — with a runbook good enough for someone else to follow |
+| **2** | A team that just grew | `useradd`, `usermod`, `chage`, group design, setgid directories that stay correct, `sudoers` drop-ins and why one command can mean the whole machine, ACLs |
+| 3 | Where the files actually live | `df`, `du`, partitions and filesystems, `mkfs`, mounting, `/etc/fstab` and how not to make a machine unbootable |
+| 4 | A machine that has gone slow | `top`, `ps`, load average, `nice`, signals, `kill` vs `kill -9`, finding the process nobody admits to starting |
+| 5 | Text as data | `grep`, `cut`, `sort`, `uniq`, `awk`, `xargs`, pipes — answering real questions about a real 100k-line log |
+| 6 | Shell scripting for real | `set -euo pipefail`, `trap`, argument parsing, `--dry-run`, a backup script on a timer |
+| 7 | Networking and getting in | `ip`, `ss`, `curl`, `ufw`, key-only SSH, and why SSH refuses your private key |
+| 8 | Capstone | take a bare VM to a live TLS website — nginx, systemd, firewall — with a runbook good enough for someone else to follow |
 
 Roughly the ground the RHCSA and Linux+ certifications cover, in the order you'd actually hit it on
 the job. If a certificate turns out to be useful to you later, you'll have done the work already.
