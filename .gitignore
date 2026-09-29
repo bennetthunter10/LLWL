@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# Isolated workspaces for in-progress work
+.worktrees/
+
+# Scratch space for subagent-driven execution (ledger, briefs, review packages)
+.superpowers/
