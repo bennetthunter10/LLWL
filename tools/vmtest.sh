@@ -73,12 +73,22 @@ LAB_DIR=/tmp/llwl/exercises/$LAB
 step "1. plant"
 VM_ROOT "$LAB_DIR/setup.sh" || fatal "setup.sh failed on a fresh machine"
 
-step "2. check must FAIL on a freshly planted lab"
-if check_output=$(VM bash -c "cd $LAB_DIR && ./check.sh" 2>&1); then
+# Run check.sh and require that it failed *by reporting symptoms*. "Non-zero"
+# alone is not enough: orb failing, a missing file, a syntax error (exit 2) or a
+# crash (126, 127, a signal) are all non-zero too, and would let a broken lab or a
+# broken machine pass the "must fail" steps for the wrong reason. The contract is
+# exit 1 plus at least one FAIL line printed by the checker.
+expect_check_failure() {
+	local status=0
+	check_output=$(VM bash -c "cd $LAB_DIR && ./check.sh" 2>&1) || status=$?
 	printf '%s\n' "$check_output"
-	fatal "check.sh passed on a freshly planted lab -- nothing is actually broken"
-fi
-printf '%s\n' "$check_output"
+	((status != 0)) || fatal "$1"
+	((status == 1)) || fatal "check.sh exited $status, not 1 -- it crashed or could not run rather than reporting symptoms"
+	grep --quiet 'FAIL' <<<"$check_output" || fatal "check.sh exited 1 but printed no FAIL line -- it is not reporting symptoms"
+}
+
+step "2. check must FAIL on a freshly planted lab"
+expect_check_failure "check.sh passed on a freshly planted lab -- nothing is actually broken"
 
 step "3. the reference solution must take it to green"
 VM_ROOT "$LAB_DIR/solutions/bennett.sh" || fatal "solutions/bennett.sh exited non-zero"
@@ -86,9 +96,7 @@ VM bash -c "cd $LAB_DIR && ./check.sh" || fatal "check.sh still fails after benn
 
 step "4. re-planting a SOLVED lab must break it again"
 VM_ROOT "$LAB_DIR/setup.sh" || fatal "setup.sh failed when re-run over a solved lab"
-if VM bash -c "cd $LAB_DIR && ./check.sh" >/dev/null 2>&1; then
-	fatal "setup.sh did not reset a solved lab back to broken"
-fi
+expect_check_failure "setup.sh did not reset a solved lab back to broken"
 
 step "5. teardown must leave nothing behind"
 VM_ROOT "$LAB_DIR/teardown.sh" || fatal "teardown.sh exited non-zero"
