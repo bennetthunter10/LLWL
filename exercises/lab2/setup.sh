@@ -61,7 +61,19 @@ done
 #    a service. In this lab it is the group allowed to read the credentials.
 # ---------------------------------------------------------------------------
 
-getent group "$OPS_GROUP" >/dev/null || groupadd --system "$OPS_GROUP"
+# llwlops may already exist because lab 1 (or the learner) made it. This lab
+# only records it in the manifest, and so only lets teardown delete it, if this
+# lab created it. On a re-plant the group exists because the FIRST plant made
+# it, so the previous manifest is read before it is overwritten and its answer
+# is carried forward; otherwise a re-run would quietly disown the group.
+OWNS_OPS_GROUP=no
+if [[ -f $MANIFEST ]] && grep --quiet --line-regexp --fixed-strings "group $OPS_GROUP" "$MANIFEST"; then
+	OWNS_OPS_GROUP=yes
+fi
+if ! getent group "$OPS_GROUP" >/dev/null; then
+	groupadd --system "$OPS_GROUP"
+	OWNS_OPS_GROUP=yes
+fi
 getent passwd "$REPORT_USER" >/dev/null || useradd \
 	--system \
 	--no-create-home \
@@ -160,6 +172,8 @@ systemctl enable --now "$AUDIT_SVC" >/dev/null
 # ---------------------------------------------------------------------------
 
 write_manifest() {
+	local group_line=""
+	[[ $OWNS_OPS_GROUP == yes ]] && group_line="group $OPS_GROUP"
 	cat >"$MANIFEST" <<MANIFESTEOF
 # LLWL lab 2 manifest -- every object this lab owns, in creation order.
 # teardown.sh removes these in reverse. Kinds: path, unit, user, group, home, note.
@@ -179,7 +193,7 @@ user llwlmira
 user llwltoby
 user llwlnadia
 user $REPORT_USER
-group $OPS_GROUP
+$group_line
 MANIFESTEOF
 	chmod 0644 "$MANIFEST"
 }

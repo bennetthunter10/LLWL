@@ -46,10 +46,11 @@ esac
 
 want_tier() { [[ $TIER == "$1" ]] || { [[ $TIER == main && $1 != 4 ]]; }; }
 
-# Only what setup.sh always plants. The sudoers drop-in is deliberately not in
-# this list: a learner may delete it, and tier 3 should report that as a
-# failure rather than the whole run aborting here.
-for p in "$SECRETS" "$PROJ_DIR"; do
+# Only what setup.sh has planted so far; later tiers add to this list as they
+# plant more. The sudoers drop-in is deliberately never in it: a learner may
+# delete it, and tier 3 should report that as a failure rather than the whole
+# run aborting here.
+for p in "$SECRETS"; do
 	[[ -e $p ]] || die "$p is missing -- plant (or re-plant) the lab with:  sudo $HERE/setup.sh"
 done
 

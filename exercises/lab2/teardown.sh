@@ -100,7 +100,13 @@ else
 	units=("${ALLOWED_UNITS[@]}")
 	paths=("${ALLOWED[@]}")
 	users=("${ALLOWED_USERS[@]}")
-	groups=("${ALLOWED_GROUPS[@]}")
+	# Without a manifest there is no record of who created llwlops. If another
+	# lab is planted it may be that lab's group, so leave it and say so.
+	if compgen -G "$LAB_STATE/lab[0-9]*.manifest" >/dev/null; then
+		warn "another lab is planted, so group ${ALLOWED_GROUPS[*]} is left in place"
+	else
+		groups=("${ALLOWED_GROUPS[@]}")
+	fi
 	homes=(/home/llwlmira /home/llwltoby /home/llwlnadia)
 fi
 
