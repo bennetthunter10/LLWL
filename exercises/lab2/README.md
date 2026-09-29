@@ -231,8 +231,9 @@ Two things stated plainly rather than left as puzzles:
 
 - **Changing a directory's group does not change the group of the files already inside it.** Each
   of these directories was planted with a seed file in it. That file predates whatever you do to
-  the directory and still carries the old group. `ls -l` in each directory when you think you are
-  finished.
+  the directory and still carries the old group. Run `sudo ls -l` in each directory when you think
+  you are finished. It needs `sudo` because, once tier 2 is right, you are on neither team and
+  plain `ls` will refuse you.
 
   Nothing in `check.sh` looks at those two files. You can leave them wrong and still go green.
   I am telling you that rather than adding a check for it, because the more useful lesson is the
@@ -297,6 +298,16 @@ Four beats, in order:
    rename the group in the rule to one of your own — the checker cares about what Nadia can do,
    not what anything is called. When you are done, `sudo -l -U llwlnadia` should list something,
    and Nadia should be able to restart `llwl-report` with no password.
+
+   One fact about sudoers you need before you write any rule of your own: **it matches the command
+   and its arguments as literal text.** `systemctl restart llwl-report` and `systemctl restart
+   llwl-report.service` are the same thing to systemd and two different commands to the policy. A
+   rule that permits one does not permit the other. `check.sh` restarts the service as Nadia with
+   the **short name**, `sudo -n systemctl restart llwl-report`, which is also what a person
+   half-awake at 3am will type, so your rule has to permit that spelling (permitting the long one
+   as well does no harm). I am dictating the invocation for the same reason I dictated the
+   drop-in's path: so that you are not left guessing what is being tested, and so that the thing
+   you learn is about sudo rather than about my checker.
 
 3. **Read what it actually grants, and then prove it.** This is the beat that matters, so do not
    skip it on the grounds that the rule looks fine.

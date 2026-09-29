@@ -45,7 +45,7 @@ no can_user_create llwlnosuchuser /tmp
 no can_user_login llwlnosuchuser
 no can_user_traverse llwlnosuchuser /tmp
 stderr=$(can_user_read llwlnosuchuser /etc/hostname 2>&1 >/dev/null || true)
-[[ -z $stderr ]] && pass "no stderr noise for a missing user" || fail "leaked to stderr: $stderr"
+if [[ -z $stderr ]]; then pass "no stderr noise for a missing user"; else fail "leaked to stderr: $stderr"; fi
 
 section "read, write, traverse, create"
 chmod 0700 "$D"
@@ -63,9 +63,11 @@ ok can_user_write "$U" "$D/f"
 section "setgid inheritance is observable"
 chgrp llwltmpg "$D"
 chmod 2770 "$D"
-[[ $(new_file_group "$U" "$D") == llwltmpg ]] &&
-	pass "new_file_group sees the setgid group" ||
+if [[ $(new_file_group "$U" "$D") == llwltmpg ]]; then
+	pass "new_file_group sees the setgid group"
+else
 	fail "new_file_group returned $(new_file_group "$U" "$D"), expected llwltmpg"
+fi
 
 section "login"
 ok can_user_login "$U"
@@ -92,14 +94,14 @@ usermod --expiredate '' "$U"
 no account_expired "$U"
 
 section "uids are numbers"
-[[ $(uid_of "$U") -gt 0 ]] && pass "uid_of returns a number" || fail "uid_of"
+if [[ $(uid_of "$U") -gt 0 ]]; then pass "uid_of returns a number"; else fail "uid_of"; fi
 ok uid_has_name "$(uid_of "$U")"
 no uid_has_name 61999
 
 section "acl support detection"
 if have_working_acls /tmp; then
 	pass "have_working_acls says yes on /tmp"
-	[[ -n $(acl_of /tmp) ]] && pass "acl_of prints something" || fail "acl_of empty"
+	if [[ -n $(acl_of /tmp) ]]; then pass "acl_of prints something"; else fail "acl_of empty"; fi
 else
 	skip "no ACL support here -- tier 4 will skip, which is the point"
 fi

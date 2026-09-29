@@ -19,6 +19,17 @@ The machine is created on demand and named `llwl-test`. Delete it with `orb dele
 Get a shell in it with `orb -m llwl-test`. Run root-requiring lab scripts the way a learner does,
 with `sudo`, not `orb -u root`: the latter leaves `SUDO_USER` unset, which some labs read.
 
+## shellcheck
+
+Every script in the repo is expected to be clean. Run it from the repo root, with the source path
+set so the `source "$HERE/../lib/common.sh"` lines can be followed:
+
+    shellcheck -x --source-path=SCRIPTDIR \
+        exercises/lab*/*.sh exercises/lab*/solutions/*.sh exercises/lib/common.sh tools/*.sh
+
+Do not disable a warning to make it pass. If one is genuinely wrong for a line, disable that line
+only, with a comment saying why (see step 0 of `vmtest.sh`).
+
 ## test-common.sh
 
 Unit tests for `exercises/lib/common.sh`. Run inside the machine:

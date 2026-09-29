@@ -97,6 +97,9 @@ in_both() { grep --line-regexp --fixed-strings --file=<(printf '%s\n' "$1") <<<"
 # starts with some. Every removal is printed. Everything here goes through
 # orb -m "$MACHINE" (VM_ROOT), so it can only ever touch the disposable machine.
 step "0. clear llwl* leftovers from earlier runs"
+# The script below is single-quoted on purpose: $u and $g must expand inside the
+# machine, in the loops that define them, not here on the host where they are unset.
+# shellcheck disable=SC2016
 removed=$(VM_ROOT bash -c '
 	for u in $(getent passwd | cut --delimiter=: --fields=1 | grep "^llwl" || true); do
 		loginctl terminate-user "$u" 2>/dev/null || true

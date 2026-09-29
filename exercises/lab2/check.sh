@@ -22,7 +22,6 @@ source "$HERE/../lib/common.sh"
 REPORT_SVC=llwl-report
 AUDIT_SVC=llwl-audit
 REPORT_USER=llwlreport
-OPS_GROUP=llwlops
 MIRA=llwlmira
 TOBY=llwltoby
 NADIA=llwlnadia
@@ -220,7 +219,7 @@ if want_tier 3; then
 				fail "$NADIA's restart of $REPORT_SVC returned success but the service did not restart"
 			fi
 		else
-			fail "$NADIA cannot restart $REPORT_SVC; that is the one thing she is on call to be able to do"
+			fail "$NADIA cannot restart $REPORT_SVC (tried: sudo -n systemctl restart $REPORT_SVC); that is the one thing she is on call to be able to do. sudo matches the command line as literal text, so a rule that permits a different spelling of the same command does not count -- 'sudo -l -U $NADIA' shows exactly what it does permit"
 		fi
 
 		# The one power she is not supposed to have. If she can stop this, she
