@@ -238,7 +238,47 @@ chown -R "$ORPHAN_UID:$ORPHAN_UID" /home/llwltoby
 delete_user llwlnadia || die "could not remove llwlnadia; log out of any session as her and re-run"
 
 # ---------------------------------------------------------------------------
-# 5. Manifest. Everything this lab OWNS, whether setup.sh created it or the
+# 5. The project tree. Somebody ran mkdir and walked away: root owns all of it,
+#    world-readable, no group structure at all. Nothing here is subtle, and
+#    that is the point -- tier 2 is where the learner has to invent structure
+#    rather than repair it.
+#
+#    Like section 4, every line RESETS. A solved lab has group-owned, setgid
+#    directories; mkdir -p and cat alone would leave all of that standing.
+#
+#    What it deliberately does NOT touch is the groups the learner made to
+#    solve this. They are his: he named them, he designed them, and this script
+#    never created them. (teardown.sh refuses to delete them for the same
+#    reason.) Once the directories are back to root:root they are simply unused.
+# ---------------------------------------------------------------------------
+
+mkdir -p "$PROJ_DIR/alpha" "$PROJ_DIR/beta" "$PROJ_DIR/shared"
+
+cat >"$PROJ_DIR/alpha/README" <<'SEED'
+Project alpha. Mira's team.
+SEED
+cat >"$PROJ_DIR/beta/README" <<'SEED'
+Project beta. Toby's team.
+SEED
+cat >"$PROJ_DIR/shared/handbook.md" <<'SEED'
+Shared between both project teams. Alpha maintains it; beta reads it.
+SEED
+
+# A learner who reached for setfacl leaves access lists that outlive chmod and
+# chown. Not every machine has the tool, and a machine without it cannot have
+# any, so its absence is not an error.
+if command -v setfacl >/dev/null; then
+	setfacl --remove-all --recursive "$PROJ_DIR" || warn "could not clear ACLs under $PROJ_DIR; check with: getfacl --recursive $PROJ_DIR"
+fi
+
+chown --recursive root:root "$PROJ_DIR"
+# The a-st half matters: a numeric 0755 on a directory leaves a setgid bit that
+# is already there, and the setgid bit is exactly what tier 2 is about.
+chmod a-st,u=rwx,go=rx "$PROJ_DIR" "$PROJ_DIR/alpha" "$PROJ_DIR/beta" "$PROJ_DIR/shared"
+chmod 0644 "$PROJ_DIR/alpha/README" "$PROJ_DIR/beta/README" "$PROJ_DIR/shared/handbook.md"
+
+# ---------------------------------------------------------------------------
+# 6. Manifest. Everything this lab OWNS, whether setup.sh created it or the
 #    learner is expected to. teardown.sh checks each entry for existence, so
 #    listing llwlnadia here is how she gets cleaned up even though she is the
 #    learner's to create.

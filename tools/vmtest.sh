@@ -91,7 +91,16 @@ step "2. check must FAIL on a freshly planted lab"
 expect_check_failure "check.sh passed on a freshly planted lab -- nothing is actually broken"
 
 step "3. the reference solution must take it to green"
+# The pipeline runs inside the machine: the host's cut is BSD and has no long flags.
+group_names() { VM bash -c "getent group | cut --delimiter=: --fields=1 | sort"; }
+groups_before=$(group_names)
 VM_ROOT "$LAB_DIR/solutions/bennett.sh" || fatal "solutions/bennett.sh exited non-zero"
+# Groups the solution brought into being. Some are the lab's (an account's
+# private group goes with the account); the ones the learner invented are not
+# the lab's, so teardown must leave them behind. Step 5 cleans up whichever
+# are left.
+# comm runs on the host here, so it gets BSD's short flags.
+invented_groups=$(comm -13 <(printf '%s\n' "$groups_before") <(group_names))
 VM bash -c "cd $LAB_DIR && ./check.sh" || fatal "check.sh still fails after bennett.sh"
 
 step "4. re-planting a SOLVED lab must break it again"
@@ -100,6 +109,12 @@ expect_check_failure "setup.sh did not reset a solved lab back to broken"
 
 step "5. teardown must leave nothing behind"
 VM_ROOT "$LAB_DIR/teardown.sh" || fatal "teardown.sh exited non-zero"
+
+# Teardown deliberately keeps groups it did not create. Remove those as the
+# learner would, so the leftover scan below still means "nothing of the lab's".
+for g in $invented_groups; do
+	if VM getent group "$g" >/dev/null; then VM_ROOT groupdel "$g"; fi
+done
 leftovers=$(VM bash -c "
 	getent passwd | grep -E '^llwl' || true
 	getent group  | grep -E '^llwl' || true

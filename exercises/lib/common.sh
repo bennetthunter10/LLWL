@@ -173,7 +173,9 @@ new_file_group() {
 	user_exists "$u" || return 1
 	probe="$dir/.llwl-probe-$$-${RANDOM}"
 	if as_user "$u" touch -- "$probe" 2>/dev/null; then
-		g=$(stat -c '%G' -- "$probe" 2>/dev/null || true)
+		# stat needs root: the caller is usually not in the group, so cannot
+		# search the directory the probe file is in.
+		g=$(sudo -n stat -c '%G' -- "$probe" 2>/dev/null || true)
 	fi
 	sudo -n rm -f -- "$probe" 2>/dev/null || true
 	[[ -n $g ]] || return 1

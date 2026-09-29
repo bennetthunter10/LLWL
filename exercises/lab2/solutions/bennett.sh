@@ -46,6 +46,40 @@ fi
 gpasswd --add llwlmira llwlops >/dev/null
 gpasswd --add llwltoby llwlops >/dev/null
 
+# --- Tier 2: the project directories ---------------------------------------
+#
+# Two groups, one per project team. I could have used one group and leaned on
+# directory permissions, but then "who is on alpha" would have no answer you
+# could query -- and `getent group` being the answer to that question is worth
+# more than saving a group.
+
+getent group llwlalpha >/dev/null || groupadd llwlalpha
+getent group llwlbeta >/dev/null || groupadd llwlbeta
+gpasswd --add llwlmira llwlalpha >/dev/null
+gpasswd --add llwltoby llwlbeta >/dev/null
+
+# 2770 rather than 0770: the setgid bit is the whole reason this keeps working
+# after today. Without it every file Mira creates comes out group llwlmira, and
+# in six months the tree is a patchwork nobody can read.
+#
+# The directory stays owned by root. Nobody needs to own it for the group to
+# work, and root owning it means neither operator can chmod their way out.
+chown root:llwlalpha /srv/llwl-projects/alpha
+chown root:llwlbeta /srv/llwl-projects/beta
+chmod 2770 /srv/llwl-projects/alpha
+chmod 2770 /srv/llwl-projects/beta
+
+# The files that were already in there predate the group, so they still carry
+# the old one. Changing a directory's group never touches what is inside it.
+chgrp --recursive llwlalpha /srv/llwl-projects/alpha
+chgrp --recursive llwlbeta /srv/llwl-projects/beta
+chmod 0660 /srv/llwl-projects/alpha/README /srv/llwl-projects/beta/README
+
+# The parent has to be traversable or nothing below it is reachable, but it
+# does not have to be listable by strangers.
+chown root:root /srv/llwl-projects
+chmod 0755 /srv/llwl-projects
+
 # ... tiers appended by later tasks ...
 
 info "lab 2 solved. Run ./check.sh as yourself."

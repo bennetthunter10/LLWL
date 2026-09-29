@@ -50,7 +50,7 @@ want_tier() { [[ $TIER == "$1" ]] || { [[ $TIER == main && $1 != 4 ]]; }; }
 # plant more. The sudoers drop-in is deliberately never in it: a learner may
 # delete it, and tier 3 should report that as a failure rather than the whole
 # run aborting here.
-for p in "$SECRETS"; do
+for p in "$SECRETS" "$PROJ_DIR" "$ALPHA" "$BETA"; do
 	[[ -e $p ]] || die "$p is missing -- plant (or re-plant) the lab with:  sudo $HERE/setup.sh"
 done
 
@@ -116,6 +116,51 @@ if want_tier 1; then
 	else
 		pass "$NADIA cannot read the service credentials"
 	fi
+fi
+
+# ---------------------------------------------------------------------------
+# Tier 2 -- the project directories
+# ---------------------------------------------------------------------------
+
+if want_tier 2; then
+	section "Tier 2 -- the project directories"
+
+	# alpha belongs to Mira's team, beta to Toby's, and neither team has any
+	# business in the other's tree.
+	check_project_dir() {
+		local dir=$1 owner=$2 stranger=$3
+		if can_user_create "$owner" "$dir"; then
+			pass "$owner can create files in $dir"
+		else
+			fail "$owner cannot create files in $dir ($(owner_of "$dir"), mode $(mode_of "$dir")); it is supposed to be her team's working directory"
+			return
+		fi
+
+		# The point is not that today's file has the right group. It is that
+		# tomorrow's will, without anybody remembering to fix it.
+		local g
+		g=$(new_file_group "$owner" "$dir" || true)
+		if [[ -n ${g:-} && $g == "$(group_of "$dir")" ]]; then
+			pass "files $owner creates in $dir inherit the directory's group ($g)"
+		else
+			fail "a file $owner creates in $dir comes out group ${g:-unknown}, but the directory's group is $(group_of "$dir"); in six months half this tree will be unreadable to her own team"
+		fi
+
+		if can_user_list "$stranger" "$dir" || can_user_traverse "$stranger" "$dir"; then
+			fail "$stranger can get into $dir (mode $(mode_of "$dir")); that is the other team's directory"
+		else
+			pass "$stranger is kept out of $dir"
+		fi
+
+		if can_user_list "$REPORT_USER" "$dir" || can_user_traverse "$REPORT_USER" "$dir"; then
+			fail "the $REPORT_USER service account can get into $dir; a daemon has no business in a human's project directory"
+		else
+			pass "$REPORT_USER is kept out of $dir"
+		fi
+	}
+
+	check_project_dir "$ALPHA" "$MIRA" "$TOBY"
+	check_project_dir "$BETA" "$TOBY" "$MIRA"
 fi
 
 # ... tiers appended by later tasks ...
