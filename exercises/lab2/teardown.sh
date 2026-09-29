@@ -17,7 +17,7 @@
 # written into this script before anything is acted on. A manifest that says
 # "user root" or "unit ssh.service" gets a refusal, not a deletion.
 #
-# Groups are different again. The learner invents his own group names in this
+# Groups are different again. The learner invents their own group names in this
 # lab, so they are not in the manifest -- and this script will not go guessing
 # at groups by pattern and deleting them as root. It prints them for a human.
 

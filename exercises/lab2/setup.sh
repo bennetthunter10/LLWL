@@ -274,7 +274,7 @@ delete_user llwlnadia || die "could not remove llwlnadia; log out of any session
 #    directories; mkdir -p and cat alone would leave all of that standing.
 #
 #    What it deliberately does NOT touch is the groups the learner made to
-#    solve this. They are his: he named them, he designed them, and this script
+#    solve this. They are theirs: the learner named them, designed them, and this script
 #    never created them. (teardown.sh refuses to delete them for the same
 #    reason.) Once the directories are back to root:root they are simply unused.
 # ---------------------------------------------------------------------------
@@ -353,7 +353,7 @@ write_manifest
 # because section 0 established that the lab made it (the manifest claims it):
 # on a re-run from a solved lab the learner's tightened rule has to give way to
 # the over-broad one. A file the lab did not make never reaches this point. What is deliberately left alone: the llwloncall group the
-# learner may have made. Like his project groups, it is his.
+# learner may have made. Like the project groups, it is theirs.
 # ---------------------------------------------------------------------------
 
 # Note: the manifest above already claims this path; if a die below leaves it absent, teardown copes.

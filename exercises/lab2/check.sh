@@ -289,7 +289,7 @@ if want_tier 4; then
 		fi
 	else
 		# Every check asks what somebody can DO. Nothing here looks at a group
-		# name or at a getfacl entry for a named group: the learner chose his
+		# name or at a getfacl entry for a named group: the learner chose their
 		# own groups, and a check that looked for them would fail a right answer.
 		if can_user_create "$MIRA" "$SHARED"; then
 			pass "$MIRA can add to $SHARED"
