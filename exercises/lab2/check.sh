@@ -291,8 +291,14 @@ if want_tier 4; then
 		# The whole point of tier 4 is files that do not exist yet. Create one
 		# now, as Mira, and see whether Toby can read it -- a one-off setfacl
 		# over what was already there will not survive this.
+		#
+		# The umask is the whole trick. Under the usual 022 the new file is 0644
+		# and Toby reads it through "other", ACL or no ACL, so the probe would
+		# pass for the wrong reason. With 077 the file is 0600 unless a default
+		# ACL on the directory overrides the umask, which is exactly what a
+		# default ACL does and nothing else here can.
 		probe=$SHARED/.llwl-inherit-probe-$$
-		if sudo -n -u "$MIRA" touch -- "$probe" 2>/dev/null; then
+		if sudo -n -u "$MIRA" bash -c 'umask 077; touch -- "$1"' _ "$probe" 2>/dev/null; then
 			if can_user_read "$TOBY" "$probe"; then
 				pass "a file $MIRA creates in $SHARED today is readable by $TOBY"
 			else
