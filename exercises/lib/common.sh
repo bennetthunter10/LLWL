@@ -110,3 +110,128 @@ user_in_group() {
 	local user=$1 group=$2
 	getent group "$group" | cut -d: -f4 | tr ',' '\n' | grep -qx -- "$user"
 }
+
+# ---------------------------------------------------------------------------
+# Asking what an account can actually do
+#
+# Lab 2 onwards, the interesting question is not "what mode is this file" but
+# "can this person open it". Those are different questions -- group membership,
+# ACLs and the traversability of every parent directory all sit in between --
+# and the only honest way to answer the second one is to go and try it.
+#
+# Every helper here is safe to call for an account that does not exist: you get
+# "no, they cannot", not an error. That matters because the learner is halfway
+# through creating these people while the checker is running.
+#
+# Two rules for using them:
+#
+#   * Every probe returns 1 for "no". Under `set -e` a bare call to one would
+#     kill the script, so only ever call them in an `if`, `&&`, `||` or `!`.
+#
+#   * Every sudo here is `sudo -n`. Without -n, a caller who needs a password
+#     gets a prompt in the middle of a probe, and a checker that hangs waiting
+#     for input is worse than one that says "no". With -n, sudo fails at once
+#     when it has no ticket. That is why check.sh runs `sudo -v` once up front,
+#     while a human is there to type the password: the ticket it caches is what
+#     lets these probes run silently afterwards.
+# ---------------------------------------------------------------------------
+
+user_exists() { getent passwd "$1" >/dev/null 2>&1; }
+
+# Run a command as somebody else. Needs a sudo ticket already in hand (see above).
+as_user() {
+	local u=$1
+	shift
+	user_exists "$u" || return 1
+	sudo -n -u "$u" -- "$@"
+}
+
+can_user_read() { as_user "$1" test -r "$2" 2>/dev/null; }
+can_user_write() { as_user "$1" test -w "$2" 2>/dev/null; }
+
+# On a directory, x is the right to go *through* it and r is the right to see
+# the names in it. They are genuinely separate powers, so ask separately.
+can_user_traverse() { as_user "$1" test -x "$2" 2>/dev/null; }
+can_user_list() { as_user "$1" ls -- "$2" >/dev/null 2>&1; }
+
+# The only way to know whether somebody can put a file somewhere is to have them
+# put one there. Cleans up after itself as root, because the probe file may well
+# belong to somebody the caller cannot touch.
+can_user_create() {
+	local u=$1 dir=$2 probe rc=0
+	user_exists "$u" || return 1
+	probe="$dir/.llwl-probe-$$-${RANDOM}"
+	as_user "$u" touch -- "$probe" 2>/dev/null || rc=1
+	sudo -n rm -f -- "$probe" 2>/dev/null || true
+	return $rc
+}
+
+# Prints the group a file gets when this user creates it here. That is how you
+# tell a setgid directory from a directory somebody chgrp'd once by hand.
+new_file_group() {
+	local u=$1 dir=$2 probe g=''
+	user_exists "$u" || return 1
+	probe="$dir/.llwl-probe-$$-${RANDOM}"
+	if as_user "$u" touch -- "$probe" 2>/dev/null; then
+		g=$(stat -c '%G' -- "$probe" 2>/dev/null || true)
+	fi
+	sudo -n rm -f -- "$probe" 2>/dev/null || true
+	[[ -n $g ]] || return 1
+	printf '%s\n' "$g"
+}
+
+login_shell_of() { getent passwd "$1" | cut -d: -f7; }
+
+# Field 8 of /etc/shadow is the expiry date in days since 1970-01-01. Empty
+# means "never". This is the only place an expired account is visible, which is
+# exactly why an expired account is such a confusing thing to be handed.
+account_expired() {
+	local exp today
+	user_exists "$1" || return 1
+	exp=$(sudo -n getent shadow "$1" 2>/dev/null | cut -d: -f8)
+	[[ -n $exp ]] || return 1
+	today=$(($(date +%s) / 86400))
+	((exp < today))
+}
+
+# Behavioural: actually try to start a login shell as them.
+#
+# The account_expired guard is NOT redundant -- do not delete it. Verified on
+# Ubuntu 24.04 (Sep 2026), as both root and an ordinary user:
+# `sudo -u <expired-user> -i true` SUCCEEDS. Sudo fails on a nologin shell (it
+# cannot exec it) but does not enforce the target account's expiry date. A real
+# ssh or console login would refuse that account, so without the guard this
+# probe would say "can log in" for someone who cannot.
+can_user_login() {
+	local u=$1
+	user_exists "$u" || return 1
+	! account_expired "$u" || return 1
+	sudo -n -u "$u" -i true >/dev/null 2>&1
+}
+
+uid_of() { id -u "$1" 2>/dev/null; }
+uid_has_name() { getent passwd "$1" >/dev/null 2>&1; }
+
+# Ask the sudo policy what it would allow, without running anything.
+sudo_permits() {
+	local u=$1
+	shift
+	user_exists "$u" || return 1
+	sudo -n -l -U "$u" -- "$@" >/dev/null 2>&1
+}
+
+acl_of() { getfacl --absolute-names --omit-header -- "$1" 2>/dev/null; }
+
+# ACLs need both the setfacl tool and a filesystem mounted with acl support.
+# Neither is guaranteed, so anything that depends on them must skip rather than
+# fail when they are missing.
+have_working_acls() {
+	local dir=$1 probe rc=0
+	command -v setfacl >/dev/null 2>&1 || return 1
+	command -v getfacl >/dev/null 2>&1 || return 1
+	probe="$dir/.llwl-acl-probe-$$"
+	sudo -n touch -- "$probe" 2>/dev/null || return 1
+	sudo -n setfacl -m u:root:rw -- "$probe" >/dev/null 2>&1 || rc=1
+	sudo -n rm -f -- "$probe" 2>/dev/null || true
+	return $rc
+}
