@@ -163,6 +163,93 @@ if want_tier 2; then
 	check_project_dir "$BETA" "$TOBY" "$MIRA"
 fi
 
+# ---------------------------------------------------------------------------
+# Tier 3 -- delegate one power
+# ---------------------------------------------------------------------------
+
+if want_tier 3; then
+	section "Tier 3 -- delegate one power"
+
+	if sudo -n visudo --check --quiet 2>/dev/null; then
+		pass "the sudo configuration parses"
+	else
+		fail "sudo's configuration does not parse; run 'sudo visudo -c' and fix it before anything else in this tier"
+	fi
+
+	if [[ -f $SUDOERS_DROPIN ]]; then
+		m=$(mode_of "$SUDOERS_DROPIN")
+		o=$(owner_of "$SUDOERS_DROPIN")
+		if [[ $m == 440 && $o == root:root ]]; then
+			pass "$SUDOERS_DROPIN is $o mode $m"
+		else
+			fail "$SUDOERS_DROPIN is $o mode $m; sudo refuses to read a drop-in that anyone but root can write, and it will not tell you it is ignoring your rule"
+		fi
+	else
+		fail "$SUDOERS_DROPIN is gone; the on-call rule has to live in that file so teardown knows it owns it"
+	fi
+
+	if user_exists "$NADIA"; then
+		# The one power she is supposed to have. Behavioural: actually restart
+		# the service as her, with no password, and confirm it really restarted.
+		before=$(sudo -n systemctl show --property=ExecMainStartTimestampMonotonic --value "$REPORT_SVC" 2>/dev/null || echo 0)
+		if as_user "$NADIA" sudo -n systemctl restart "$REPORT_SVC" >/dev/null 2>&1; then
+			sleep 1
+			after=$(sudo -n systemctl show --property=ExecMainStartTimestampMonotonic --value "$REPORT_SVC" 2>/dev/null || echo 0)
+			if [[ $after -gt $before ]]; then
+				pass "$NADIA can restart $REPORT_SVC without a password, and it really restarted"
+			else
+				fail "$NADIA's restart of $REPORT_SVC returned success but the service did not restart"
+			fi
+		else
+			fail "$NADIA cannot restart $REPORT_SVC; that is the one thing she is on call to be able to do"
+		fi
+
+		# The one power she is not supposed to have. If she can stop this, she
+		# can stop anything on the machine. On an unsolved lab this attempt
+		# SUCCEEDS, so the checker puts the unit back afterwards whatever the
+		# outcome: a checker that leaves the machine worse than it found it
+		# would make every later check lie.
+		if as_user "$NADIA" sudo -n systemctl stop "$AUDIT_SVC" >/dev/null 2>&1; then
+			fail "$NADIA can stop $AUDIT_SVC, a service she has nothing to do with; the rule grants far more than one power"
+		else
+			pass "$NADIA cannot stop $AUDIT_SVC"
+		fi
+		sudo -n systemctl start "$AUDIT_SVC" >/dev/null 2>&1 || true
+
+		# Masking is tested by asking the policy rather than by doing it: on a
+		# unit whose file lives in /etc/systemd/system, systemctl mask refuses
+		# ("File exists") even for root, so an attempt would prove nothing.
+		if sudo_permits "$NADIA" "$(command -v systemctl)" mask "$AUDIT_SVC"; then
+			fail "$NADIA could mask $AUDIT_SVC; masking a unit is how you make a service unstartable until somebody works out why"
+		else
+			pass "$NADIA cannot mask $AUDIT_SVC"
+		fi
+
+		# Ask the policy itself, without running anything. If the rule still
+		# permits a command like this, it is still an "any systemctl" rule
+		# however narrowly the restart case happens to behave.
+		if sudo_permits "$NADIA" "$(command -v systemctl)" poweroff; then
+			fail "the sudo policy would let $NADIA run 'systemctl poweroff' as root; the rule is still not scoped to one command"
+		else
+			pass "the sudo policy does not let $NADIA run arbitrary systemctl subcommands"
+		fi
+
+		if can_user_read "$NADIA" "$SECRETS"; then
+			fail "$NADIA can read $SECRETS; being on call for a service is not the same as being trusted with its credentials"
+		else
+			pass "$NADIA cannot read $SECRETS"
+		fi
+	else
+		fail "$NADIA does not exist, so none of tier 3 can be tested; finish tier 1 first"
+	fi
+
+	if systemctl is-active --quiet "$AUDIT_SVC"; then
+		pass "$AUDIT_SVC is running"
+	else
+		fail "$AUDIT_SVC is not running; if you stopped it while experimenting, start it again"
+	fi
+fi
+
 # ... tiers appended by later tasks ...
 
 if [[ $TIER == main ]]; then

@@ -312,3 +312,51 @@ MANIFESTEOF
 	chmod 0644 "$MANIFEST"
 }
 write_manifest
+
+# ---------------------------------------------------------------------------
+# 7. The rule the previous admin left behind.
+#
+# Read the installation dance below carefully, because it is the pattern for
+# writing any sudoers file from a script: build it somewhere harmless, have
+# visudo parse it, and only then move it into place. A file in /etc/sudoers.d
+# that sudo cannot parse can cost you sudo on the whole machine, and this lab
+# refuses to be the thing that does that to somebody.
+#
+# This is the one file in the lab that RESETS rather than only creates. The path
+# is the lab's own (it is in the manifest and teardown owns it), and on a re-run
+# from a solved lab the learner's tightened rule has to give way to the
+# over-broad one. What is deliberately left alone: the llwloncall group the
+# learner may have made. Like his project groups, it is his.
+# ---------------------------------------------------------------------------
+
+SYSTEMCTL=$(command -v systemctl)
+
+dropin_tmp=$(mktemp)
+# Whatever happens below, do not leave the scratch copy lying around.
+trap 'rm -f "$dropin_tmp"' EXIT
+
+cat >"$dropin_tmp" <<DROPIN
+# /etc/sudoers.d/llwl-oncall
+#
+# So that whoever is on call can bounce the reporting service at 3am without
+# having to wake anybody up.
+#
+#   -- the previous admin, who no longer works here
+%llwloncall ALL=(ALL) NOPASSWD: $SYSTEMCTL
+DROPIN
+
+# 1. Does this one file parse, on its own? If not, it never goes near /etc.
+if ! visudo --check --quiet --file="$dropin_tmp"; then
+	die "refusing to install a sudoers drop-in that visudo will not accept"
+fi
+
+# 2. install sets owner and mode as it writes, so there is no moment when the
+#    file exists with the wrong ones. It also replaces whatever was there.
+install --owner=root --group=root --mode=0440 "$dropin_tmp" "$SUDOERS_DROPIN"
+
+# 3. Does the whole configuration still parse with it in place? If not, take it
+#    straight back out -- a planted lab must never cost the learner their sudo.
+if ! visudo --check --quiet; then
+	rm -f "$SUDOERS_DROPIN"
+	die "installing the drop-in broke sudo's configuration; removed it again"
+fi
