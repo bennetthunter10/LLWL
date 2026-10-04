@@ -2,8 +2,6 @@
 
 **Skills:** `useradd`, `usermod`, `chage`, `gpasswd`, `id`, `getent`, setgid (recap), `visudo`,
 `sudo -l`, `setfacl`
-**Time:** tier 1 in an evening. All three tiers over a week or two. Tier 4 whenever you feel like
-it, including never. There is no prize for rushing.
 
 ## The situation
 
